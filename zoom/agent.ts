@@ -191,26 +191,13 @@ export default function init(omnideck: OmniDeck) {
     const parsed = parseShortcutDarwin(shortcut);
     if (!parsed) return false;
 
-    // Save frontmost app and activate Zoom (via host process AppleScript)
-    const prevApp = await runAppleScript(`
-      tell application "System Events"
-        set frontApp to bundle identifier of first application process whose frontmost is true
-      end tell
-      tell application "zoom.us" to activate
-      delay 0.15
-      return frontApp
-    `);
-
-    // Send keystroke via host process CGEvents
-    const res = await omnideck.platformRequest("send_keystroke", {
+    // Single IPC call: activate Zoom, send keystroke, restore previous app.
+    // All happens in the Tauri host process to avoid timing issues.
+    const res = await omnideck.platformRequest("send_keystroke_to_app", {
+      app: "zoom.us",
       keyCode: parsed.keyCode,
       flags: parsed.flags,
     }) as { success?: boolean; error?: string };
-
-    // Restore previous app (fire-and-forget)
-    if (prevApp && prevApp !== "us.zoom.xos") {
-      runAppleScript(`tell application id "${prevApp}" to activate`).catch(() => {});
-    }
 
     return res.success === true;
   }
