@@ -1,11 +1,7 @@
 // plugins/bettertouchtool/hub.ts
-// Hub-side plugin definition. Currently external plugins' hub files are not
-// auto-loaded — this serves as documentation of the intended hub integration
-// and will work once hub-side external plugin loading is implemented.
 
 import { z } from "zod";
-import { field } from "@omnideck/plugin-schema";
-import type { OmniDeckPlugin, PluginContext } from "@omnideck/hub/plugins/types";
+import { field, type OmniDeckPlugin, type PluginContext } from "@omnideck/plugin-schema";
 
 export const betterTouchToolPlugin: OmniDeckPlugin = {
   id: "bettertouchtool",

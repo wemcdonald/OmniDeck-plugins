@@ -11,4 +11,5 @@ description: |
       then run `sudo usermod -aG i2c $USER` and `sudo modprobe i2c-dev`.
       On Raspberry Pi, add `dtoverlay=vc4-kms-v3d` to /boot/config.txt.
       Ensure DDC/CI is enabled in your monitor's OSD settings.
+hub: hub.ts
 agent: agent.ts
