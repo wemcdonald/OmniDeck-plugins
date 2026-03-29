@@ -243,10 +243,36 @@ export default function init(omnideck: OmniDeck) {
     return { keyCode, flags };
   }
 
+  /**
+   * Activate Zoom, send a CGEvent keystroke, then restore the previous app.
+   * osascript handles focus (no Accessibility needed); CGEvent handles the key.
+   */
   async function sendKeystrokeDarwin(shortcut: string): Promise<boolean> {
     const parsed = parseShortcutDarwin(shortcut);
     if (!parsed) return false;
-    return sendKeyDarwin(parsed.keyCode, parsed.flags);
+
+    // Save frontmost app and activate Zoom
+    const activate = await omnideck.exec("osascript", ["-e", `
+      tell application "System Events"
+        set frontApp to bundle identifier of first application process whose frontmost is true
+      end tell
+      tell application "zoom.us" to activate
+      delay 0.15
+      return frontApp
+    `]);
+    const prevApp = activate.stdout.trim();
+
+    // Send the keystroke via CGEvent (goes to now-focused Zoom)
+    const ok = sendKeyDarwin(parsed.keyCode, parsed.flags);
+
+    // Restore previous app (fire-and-forget)
+    if (prevApp && prevApp !== "us.zoom.xos") {
+      omnideck.exec("osascript", ["-e",
+        `tell application id "${prevApp}" to activate`,
+      ]);
+    }
+
+    return ok;
   }
 
   // ── Windows: send keystrokes, saving/restoring foreground window ─────────
