@@ -8,6 +8,7 @@ Community plugins for [OmniDeck](https://github.com/wemcdonald/OmniDeck).
 |--------|-------------|
 | [monitor-control](monitor-control/) | Switch monitor inputs via DDC/CI |
 | [bettertouchtool](bettertouchtool/) | BetterTouchTool integration for macOS |
+| [zoom](zoom/) | Control Zoom meetings — mute, video, share, hand, reactions, recording |
 
 ## Installation
 

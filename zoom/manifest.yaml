@@ -1,0 +1,13 @@
+id: zoom
+name: "Zoom"
+version: "1.0.0"
+description: |
+  Control Zoom meetings from your deck. Toggle mute, camera, screen sharing,
+  raise hand, send reactions, start/stop recording, and leave or end meetings.
+
+  Uses keyboard shortcuts to control Zoom — enable "Global Shortcuts" in
+  Zoom Settings > Keyboard Shortcuts for best results.
+
+  Supported platforms: macOS, Windows, Linux.
+hub: hub.ts
+agent: agent.ts
