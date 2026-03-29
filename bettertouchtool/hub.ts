@@ -1,84 +1,103 @@
 // plugins/bettertouchtool/hub.ts
-// Hub-side plugin: registers actions, state providers, and button presets.
-import type { OmniDeckPlugin, PluginContext } from "../../hub/src/plugins/types.js";
+// Hub-side plugin definition. Currently external plugins' hub files are not
+// auto-loaded — this serves as documentation of the intended hub integration
+// and will work once hub-side external plugin loading is implemented.
+
 import { z } from "zod";
+import { field } from "@omnideck/plugin-schema";
+import type { OmniDeckPlugin, PluginContext } from "@omnideck/hub/plugins/types";
 
-// ---------------------------------------------------------------------------
-// Config schema (validated by hub on plugin install / config save)
-// ---------------------------------------------------------------------------
-
-export const configSchema = z.object({
-  port: z.number().default(12345).describe("BTT web server port"),
-  secret: z.string().optional().describe("BTT shared secret (leave blank if disabled)"),
-  poll_interval: z.string().default("2s").describe("How often to poll BTT for trigger list"),
-});
-
-// ---------------------------------------------------------------------------
-// Plugin definition
-// ---------------------------------------------------------------------------
-
-export default {
+export const betterTouchToolPlugin: OmniDeckPlugin = {
   id: "bettertouchtool",
   name: "BetterTouchTool",
   version: "0.1.0",
-  configSchema,
+  icon: "ms:touch-app",
 
   async init(ctx: PluginContext) {
-    // ------------------------------------------------------------------
-    // Action: run_trigger
-    // Hub receives this from a button press and forwards it to the agent
-    // that has BTT running (identified by targetAgent / focusedAgent).
-    // ------------------------------------------------------------------
+    const targetParam = {
+      target: field(z.string().optional(), { label: "Target", fieldType: "agent" as const }),
+    };
+
+    // -- Action: run a BTT named trigger --
     ctx.registerAction({
       id: "run_trigger",
       name: "Run BTT Trigger",
+      description: "Execute a BetterTouchTool named trigger",
+      icon: "ms:touch-app",
       paramsSchema: z.object({
-        name: z.string().describe("Name of the BTT named trigger to execute"),
+        ...targetParam,
+        name: field(z.string(), { label: "Trigger Name" }),
       }),
       async execute(params, actionCtx) {
-        ctx.state.set("bettertouchtool", "pending_command", {
-          command: "run_trigger",
-          target: actionCtx.targetAgent ?? actionCtx.focusedAgent,
+        const p = params as Record<string, unknown>;
+        const target = (p.target as string | undefined) ?? actionCtx.focusedAgent;
+        ctx.state.set("bettertouchtool", `pending:${target}:run_trigger`, {
           params,
+          timestamp: Date.now(),
         });
       },
     });
 
-    // ------------------------------------------------------------------
-    // State provider: triggers
-    // Surfaces the live trigger list polled from BTT on the agent machine.
-    // ------------------------------------------------------------------
+    // -- Action: run a BTT action by identifier --
+    ctx.registerAction({
+      id: "run_action",
+      name: "Run BTT Action",
+      description: "Execute a BetterTouchTool action by identifier",
+      icon: "ms:play-arrow",
+      paramsSchema: z.object({
+        ...targetParam,
+        action: field(z.string(), { label: "Action Identifier" }),
+      }),
+      async execute(params, actionCtx) {
+        const p = params as Record<string, unknown>;
+        const target = (p.target as string | undefined) ?? actionCtx.focusedAgent;
+        ctx.state.set("bettertouchtool", `pending:${target}:run_action`, {
+          params,
+          timestamp: Date.now(),
+        });
+      },
+    });
+
+    // -- State Provider: trigger count --
     ctx.registerStateProvider({
       id: "triggers",
-      resolve() {
-        const triggers = ctx.state.get("bettertouchtool", "triggers") as unknown[] | undefined;
+      name: "BTT Triggers",
+      description: "Number of available BetterTouchTool triggers",
+      icon: "ms:touch-app",
+      paramsSchema: z.object(targetParam),
+      templateVariables: [
+        { key: "trigger_count", label: "Trigger Count", example: "12" },
+      ],
+      resolve(params) {
+        const p = params as Record<string, unknown>;
+        const target = p.target as string | undefined;
+        const triggers = target
+          ? (ctx.state.get("bettertouchtool", `agent:${target}:triggers`) as unknown[] | undefined)
+          : undefined;
+        const count = triggers?.length ?? 0;
         return {
-          label: triggers != null ? `${triggers.length} triggers` : "...",
+          state: { label: count > 0 ? `${count} triggers` : "..." },
+          variables: { trigger_count: String(count) },
         };
       },
     });
 
-    // ------------------------------------------------------------------
-    // Preset: btt_trigger_button
-    // A ready-made button preset users can drop onto the deck.
-    // ------------------------------------------------------------------
+    // -- Preset: BTT trigger button --
     ctx.registerPreset({
-      id: "btt_trigger_button",
+      id: "btt_trigger",
       name: "BTT Trigger",
+      description: "Execute a BetterTouchTool named trigger",
+      category: "Automation",
+      icon: "ms:touch-app",
+      action: "run_trigger",
       defaults: {
-        action: "run_trigger",
-        icon: "command",
+        icon: "ms:touch-app",
         label: "BTT",
-        stateProvider: "triggers",
       },
-      mapParams: (p) => ({
-        actionParams: { name: p.name },
-        stateParams: {},
-      }),
     });
+
+    ctx.setHealth({ status: "ok" });
   },
 
-  async destroy() {
-    // No persistent hub-side resources to clean up.
-  },
-} satisfies OmniDeckPlugin;
+  async destroy() {},
+};
