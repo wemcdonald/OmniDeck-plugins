@@ -7,6 +7,7 @@ Community plugins for [OmniDeck](https://github.com/wemcdonald/OmniDeck).
 | Plugin | Description |
 |--------|-------------|
 | [monitor-control](monitor-control/) | Switch monitor inputs via DDC/CI |
+| [bettertouchtool](bettertouchtool/) | BetterTouchTool integration for macOS |
 
 ## Installation
 
