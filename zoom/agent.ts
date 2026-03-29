@@ -48,7 +48,8 @@ export default function init(omnideck: OmniDeck) {
       } else if (omnideck.platform === "linux") {
         state = await pollLinux();
       }
-    } catch {
+    } catch (err) {
+      omnideck.log.error("Zoom poll failed", { err: String(err) });
       state = { ...EMPTY_STATE };
     }
     omnideck.setState("meeting", state);
@@ -163,7 +164,89 @@ export default function init(omnideck: OmniDeck) {
       end tell
     `;
     const r = await omnideck.exec("osascript", ["-e", script]);
+    if (r.exitCode !== 0) {
+      omnideck.log.warn("Menu click failed", { menuItem, exitCode: r.exitCode, stderr: r.stderr.slice(0, 200) });
+    }
     return r.exitCode === 0;
+  }
+
+  // ── macOS: CGEvent-based keystroke via FFI ──────────────────────────────
+  // osascript cannot send keystrokes (Accessibility blocks child processes).
+  // Instead, we use Core Graphics CGEvents which work from the Tauri app
+  // process directly (which has Accessibility permission).
+
+  // macOS virtual key codes for the keys we need
+  const MAC_KEYCODES: Record<string, number> = {
+    a: 0, s: 1, d: 2, f: 3, h: 4, g: 5, z: 6, x: 7, c: 8, v: 9,
+    b: 11, q: 12, w: 13, e: 14, r: 15, y: 16, t: 17,
+  };
+
+  // CGEvent modifier flags
+  const kCGEventFlagMaskShift = 0x20000;
+  const kCGEventFlagMaskControl = 0x40000;
+  const kCGEventFlagMaskAlternate = 0x80000;
+  const kCGEventFlagMaskCommand = 0x100000;
+
+  let cgLib: ReturnType<typeof omnideck.ffi.open> | null = null;
+
+  if (omnideck.platform === "darwin") {
+    try {
+      cgLib = omnideck.ffi.open(
+        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
+        {
+          CGEventCreateKeyboardEvent: { args: ["ptr", "u16", "bool"], returns: "ptr" },
+          CGEventSetFlags: { args: ["ptr", "u64"], returns: "void" },
+          CGEventPost: { args: ["u32", "ptr"], returns: "void" },
+          CFRelease: { args: ["ptr"], returns: "void" },
+        },
+      );
+    } catch (err) {
+      omnideck.log.warn("CoreGraphics FFI not available", { err: String(err) });
+    }
+  }
+
+  function sendKeyDarwin(keyCode: number, flags: number): boolean {
+    if (!cgLib) return false;
+    // Key down
+    const down = cgLib.call("CGEventCreateKeyboardEvent", null, keyCode, true);
+    if (!down) return false;
+    cgLib.call("CGEventSetFlags", down, flags);
+    cgLib.call("CGEventPost", 0, down); // 0 = kCGHIDEventTap
+    // Key up
+    const up = cgLib.call("CGEventCreateKeyboardEvent", null, keyCode, false);
+    if (up) {
+      cgLib.call("CGEventSetFlags", up, flags);
+      cgLib.call("CGEventPost", 0, up);
+      cgLib.call("CFRelease", up);
+    }
+    cgLib.call("CFRelease", down);
+    return true;
+  }
+
+  function parseShortcutDarwin(shortcut: string): { keyCode: number; flags: number } | null {
+    const parts = shortcut.split(",").map((k) => k.trim());
+    const key = parts[parts.length - 1].toLowerCase();
+    const modifiers = parts.slice(0, -1);
+
+    const keyCode = MAC_KEYCODES[key];
+    if (keyCode === undefined) return null;
+
+    let flags = 0;
+    for (const mod of modifiers) {
+      switch (mod) {
+        case "cmd": case "command": flags |= kCGEventFlagMaskCommand; break;
+        case "shift": flags |= kCGEventFlagMaskShift; break;
+        case "alt": case "option": flags |= kCGEventFlagMaskAlternate; break;
+        case "ctrl": case "control": flags |= kCGEventFlagMaskControl; break;
+      }
+    }
+    return { keyCode, flags };
+  }
+
+  async function sendKeystrokeDarwin(shortcut: string): Promise<boolean> {
+    const parsed = parseShortcutDarwin(shortcut);
+    if (!parsed) return false;
+    return sendKeyDarwin(parsed.keyCode, parsed.flags);
   }
 
   // ── Windows: send keystrokes, saving/restoring foreground window ─────────
@@ -234,29 +317,23 @@ export default function init(omnideck: OmniDeck) {
    * On Windows/Linux, we fall back to keyboard shortcuts targeted at the Zoom window.
    */
 
-  // Maps action IDs to macOS Meeting menu item names.
-  // The menu text depends on current state, so we try both variants.
-  const DARWIN_MENU_ITEMS: Record<string, string[]> = {
-    toggle_mute: ["Mute Audio", "Unmute Audio"],
-    toggle_video: ["Stop Video", "Start Video"],
-    toggle_share: ["Share Screen", "Stop Share"],
-    leave: ["Leave Meeting"],
-    end: ["End Meeting"],
-    toggle_hand: ["Raise Hand", "Lower Hand"],
-    toggle_recording: ["Record", "Stop Recording", "Record on this Computer"],
-    react: ["Reactions"],
+  // macOS: all actions use keyboard shortcuts with brief focus/restore,
+  // since menu clicks require a higher Accessibility permission level.
+  const DARWIN_SHORTCUTS: Record<string, string> = {
+    toggle_mute: "cmd,shift,a",
+    toggle_video: "cmd,shift,v",
+    toggle_share: "cmd,shift,s",
+    toggle_recording: "cmd,shift,r",
+    leave: "cmd,w",
+    end: "cmd,shift,e",
+    toggle_hand: "option,y",
+    react: "cmd,shift,e",
   };
 
   async function executeAction(actionId: string): Promise<boolean> {
     if (omnideck.platform === "darwin") {
-      const menuItems = DARWIN_MENU_ITEMS[actionId];
-      if (!menuItems) return false;
-      // Try each variant — only one will match the current state.
-      for (const item of menuItems) {
-        const ok = await clickDarwinMenuItem(item);
-        if (ok) return true;
-      }
-      return false;
+      const shortcut = DARWIN_SHORTCUTS[actionId];
+      return shortcut ? sendKeystrokeDarwin(shortcut) : false;
     }
 
     if (omnideck.platform === "windows") {
