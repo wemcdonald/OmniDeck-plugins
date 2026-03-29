@@ -2,9 +2,11 @@
 // Agent-side plugin: detects Zoom meeting state and controls Zoom without
 // requiring the Zoom window to be focused.
 //
-// macOS  — AppleScript menu-item clicks via System Events (no focus needed)
-// Windows — save/restore foreground window around SendKeys
-// Linux  — xdotool key --window to target the Zoom window directly
+// macOS  — platformRequest("run_applescript") for detection,
+//          platformRequest("send_keystroke") for actions (both run in the
+//          Tauri host process which has Accessibility permission)
+// Windows — PowerShell for detection, SendKeys for actions
+// Linux  — pgrep/xdotool for detection and actions
 import type { OmniDeck } from "@omnideck/agent-sdk";
 
 interface ZoomState {
@@ -58,7 +60,14 @@ export default function init(omnideck: OmniDeck) {
   const handle = omnideck.setInterval(poll, pollInterval);
   poll();
 
-  // ── macOS: AppleScript menu introspection ────────────────────────────────
+  // ── macOS: AppleScript via platformRequest (runs in Tauri host) ──────────
+
+  async function runAppleScript(script: string): Promise<string> {
+    const res = await omnideck.platformRequest("run_applescript", { script }) as
+      { result?: string; error?: string };
+    if (res.error) throw new Error(res.error);
+    return res.result ?? "";
+  }
 
   async function pollDarwin(): Promise<ZoomState> {
     const script = `
@@ -85,8 +94,7 @@ export default function init(omnideck: OmniDeck) {
         end tell
       end tell
     `;
-    const r = await omnideck.exec("osascript", ["-e", script]);
-    const out = r.stdout.trim();
+    const out = await runAppleScript(script);
 
     if (out === "not_running") return { ...EMPTY_STATE };
     if (out === "no_meeting") return { ...EMPTY_STATE, running: true };
@@ -120,7 +128,6 @@ export default function init(omnideck: OmniDeck) {
     if (out === "not_running") return { ...EMPTY_STATE };
     if (out === "no_meeting") return { ...EMPTY_STATE, running: true };
 
-    // Windows can't easily read Zoom's menu state, so toggle states are unknown.
     return { ...EMPTY_STATE, running: true, inMeeting: true };
   }
 
@@ -135,7 +142,6 @@ export default function init(omnideck: OmniDeck) {
 
     const win = await omnideck.exec("xdotool", ["search", "--name", "Zoom Meeting"]);
     if (win.exitCode !== 0 || !win.stdout.trim()) {
-      // Also try "Zoom Workplace"
       const win2 = await omnideck.exec("xdotool", ["search", "--name", "Zoom Workplace"]);
       if (win2.exitCode !== 0 || !win2.stdout.trim()) {
         linuxWindowId = undefined;
@@ -149,79 +155,18 @@ export default function init(omnideck: OmniDeck) {
     return { ...EMPTY_STATE, running: true, inMeeting: true };
   }
 
-  // ── macOS: click Zoom menu items without focus ──────────────────────────
+  // ── macOS keystroke via platformRequest ──────────────────────────────────
+  // Keystrokes are sent via CGEvents in the Tauri host process, which has
+  // Accessibility permission. The sidecar doesn't need Accessibility at all.
 
-  /**
-   * Click a menu item in Zoom's Meeting menu via System Events.
-   * This targets the zoom.us process directly — no window focus required.
-   */
-  async function clickDarwinMenuItem(menuItem: string): Promise<boolean> {
-    const script = `
-      tell application "System Events"
-        tell process "zoom.us"
-          click menu item "${menuItem}" of menu 1 of menu bar item "Meeting" of menu bar 1
-        end tell
-      end tell
-    `;
-    const r = await omnideck.exec("osascript", ["-e", script]);
-    if (r.exitCode !== 0) {
-      omnideck.log.warn("Menu click failed", { menuItem, exitCode: r.exitCode, stderr: r.stderr.slice(0, 200) });
-    }
-    return r.exitCode === 0;
-  }
-
-  // ── macOS: CGEvent-based keystroke via FFI ──────────────────────────────
-  // osascript cannot send keystrokes (Accessibility blocks child processes).
-  // Instead, we use Core Graphics CGEvents which work from the Tauri app
-  // process directly (which has Accessibility permission).
-
-  // macOS virtual key codes for the keys we need
   const MAC_KEYCODES: Record<string, number> = {
     a: 0, s: 1, d: 2, f: 3, h: 4, g: 5, z: 6, x: 7, c: 8, v: 9,
     b: 11, q: 12, w: 13, e: 14, r: 15, y: 16, t: 17,
   };
 
-  // CGEvent modifier flags
   const kCGEventFlagMaskShift = 0x20000;
-  const kCGEventFlagMaskControl = 0x40000;
   const kCGEventFlagMaskAlternate = 0x80000;
   const kCGEventFlagMaskCommand = 0x100000;
-
-  let cgLib: ReturnType<typeof omnideck.ffi.open> | null = null;
-
-  if (omnideck.platform === "darwin") {
-    try {
-      cgLib = omnideck.ffi.open(
-        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
-        {
-          CGEventCreateKeyboardEvent: { args: ["ptr", "u16", "bool"], returns: "ptr" },
-          CGEventSetFlags: { args: ["ptr", "u64"], returns: "void" },
-          CGEventPost: { args: ["u32", "ptr"], returns: "void" },
-          CFRelease: { args: ["ptr"], returns: "void" },
-        },
-      );
-    } catch (err) {
-      omnideck.log.warn("CoreGraphics FFI not available", { err: String(err) });
-    }
-  }
-
-  function sendKeyDarwin(keyCode: number, flags: number): boolean {
-    if (!cgLib) return false;
-    // Key down
-    const down = cgLib.call("CGEventCreateKeyboardEvent", null, keyCode, true);
-    if (!down) return false;
-    cgLib.call("CGEventSetFlags", down, flags);
-    cgLib.call("CGEventPost", 0, down); // 0 = kCGHIDEventTap
-    // Key up
-    const up = cgLib.call("CGEventCreateKeyboardEvent", null, keyCode, false);
-    if (up) {
-      cgLib.call("CGEventSetFlags", up, flags);
-      cgLib.call("CGEventPost", 0, up);
-      cgLib.call("CFRelease", up);
-    }
-    cgLib.call("CFRelease", down);
-    return true;
-  }
 
   function parseShortcutDarwin(shortcut: string): { keyCode: number; flags: number } | null {
     const parts = shortcut.split(",").map((k) => k.trim());
@@ -237,42 +182,37 @@ export default function init(omnideck: OmniDeck) {
         case "cmd": case "command": flags |= kCGEventFlagMaskCommand; break;
         case "shift": flags |= kCGEventFlagMaskShift; break;
         case "alt": case "option": flags |= kCGEventFlagMaskAlternate; break;
-        case "ctrl": case "control": flags |= kCGEventFlagMaskControl; break;
       }
     }
     return { keyCode, flags };
   }
 
-  /**
-   * Activate Zoom, send a CGEvent keystroke, then restore the previous app.
-   * osascript handles focus (no Accessibility needed); CGEvent handles the key.
-   */
   async function sendKeystrokeDarwin(shortcut: string): Promise<boolean> {
     const parsed = parseShortcutDarwin(shortcut);
     if (!parsed) return false;
 
-    // Save frontmost app and activate Zoom
-    const activate = await omnideck.exec("osascript", ["-e", `
+    // Save frontmost app and activate Zoom (via host process AppleScript)
+    const prevApp = await runAppleScript(`
       tell application "System Events"
         set frontApp to bundle identifier of first application process whose frontmost is true
       end tell
       tell application "zoom.us" to activate
       delay 0.15
       return frontApp
-    `]);
-    const prevApp = activate.stdout.trim();
+    `);
 
-    // Send the keystroke via CGEvent (goes to now-focused Zoom)
-    const ok = sendKeyDarwin(parsed.keyCode, parsed.flags);
+    // Send keystroke via host process CGEvents
+    const res = await omnideck.platformRequest("send_keystroke", {
+      keyCode: parsed.keyCode,
+      flags: parsed.flags,
+    }) as { success?: boolean; error?: string };
 
     // Restore previous app (fire-and-forget)
     if (prevApp && prevApp !== "us.zoom.xos") {
-      omnideck.exec("osascript", ["-e",
-        `tell application id "${prevApp}" to activate`,
-      ]);
+      runAppleScript(`tell application id "${prevApp}" to activate`).catch(() => {});
     }
 
-    return ok;
+    return res.success === true;
   }
 
   // ── Windows: send keystrokes, saving/restoring foreground window ─────────
@@ -283,7 +223,6 @@ export default function init(omnideck: OmniDeck) {
     const modifiers = parts.slice(0, -1);
     const modMap: Record<string, string> = { alt: "%", shift: "+", ctrl: "^", control: "^" };
     const sendKey = modifiers.map((m) => modMap[m] ?? "").join("") + key;
-    // Save the current foreground window, activate Zoom, send key, restore.
     const script = `
       Add-Type -AssemblyName Microsoft.VisualBasic
       Add-Type -AssemblyName System.Windows.Forms
@@ -321,7 +260,18 @@ export default function init(omnideck: OmniDeck) {
     return r.exitCode === 0;
   }
 
-  // ── Keyboard shortcuts for Windows/Linux ─────────────────────────────────
+  // ── Keyboard shortcuts ───────────────────────────────────────────────────
+
+  const DARWIN_SHORTCUTS: Record<string, string> = {
+    toggle_mute: "cmd,shift,a",
+    toggle_video: "cmd,shift,v",
+    toggle_share: "cmd,shift,s",
+    toggle_recording: "cmd,shift,r",
+    leave: "cmd,w",
+    end: "cmd,shift,e",
+    toggle_hand: "option,y",
+    react: "cmd,shift,e",
+  };
 
   const SHORTCUTS_WINDOWS: Record<string, string> = {
     toggle_mute: "alt,a",
@@ -337,24 +287,6 @@ export default function init(omnideck: OmniDeck) {
   const SHORTCUTS_LINUX: Record<string, string> = { ...SHORTCUTS_WINDOWS };
 
   // ── Unified action dispatcher ────────────────────────────────────────────
-
-  /**
-   * On macOS, we click menu items directly (focus-free).
-   * On Windows/Linux, we fall back to keyboard shortcuts targeted at the Zoom window.
-   */
-
-  // macOS: all actions use keyboard shortcuts with brief focus/restore,
-  // since menu clicks require a higher Accessibility permission level.
-  const DARWIN_SHORTCUTS: Record<string, string> = {
-    toggle_mute: "cmd,shift,a",
-    toggle_video: "cmd,shift,v",
-    toggle_share: "cmd,shift,s",
-    toggle_recording: "cmd,shift,r",
-    leave: "cmd,w",
-    end: "cmd,shift,e",
-    toggle_hand: "option,y",
-    react: "cmd,shift,e",
-  };
 
   async function executeAction(actionId: string): Promise<boolean> {
     if (omnideck.platform === "darwin") {
@@ -391,7 +323,6 @@ export default function init(omnideck: OmniDeck) {
   for (const actionId of actions) {
     omnideck.onAction(actionId, async () => {
       const ok = await executeAction(actionId);
-      // Re-poll immediately so state updates reflect the action.
       if (ok) await poll();
       return { success: ok, error: ok ? undefined : "Zoom not running or action failed" };
     });
