@@ -405,6 +405,42 @@ export const googleMeetPlugin: OmniDeckPlugin = {
       },
     });
 
+    // ── Scaffold emoji page ──────────────────────────────────────────────
+
+    const EMOJIS = [
+      { emoji: "\u{1F496}", label: "Heart" },
+      { emoji: "\u{1F44D}", label: "Thumbs Up" },
+      { emoji: "\u{1F389}", label: "Party" },
+      { emoji: "\u{1F44F}", label: "Clap" },
+      { emoji: "\u{1F602}", label: "Haha" },
+      { emoji: "\u{1F62E}", label: "Wow" },
+      { emoji: "\u{1F622}", label: "Sad" },
+      { emoji: "\u{1F914}", label: "Thinking" },
+      { emoji: "\u{1F44E}", label: "Thumbs Down" },
+    ];
+
+    const emojiButtons = EMOJIS.map((e, i) => ({
+      pos: [i % 5, Math.floor(i / 5)],
+      action: "google-meet.emoji_react",
+      params: { emoji: e.emoji },
+      icon: e.emoji,
+      label: e.label,
+    }));
+
+    emojiButtons.push({
+      pos: [4, 2],
+      action: "omnideck-core.go_back",
+      params: {},
+      icon: "ms:arrow-back",
+      label: "Back",
+    });
+
+    ctx.scaffoldPage("meet-emoji", {
+      page: "meet-emoji",
+      name: "Meet Emoji",
+      buttons: emojiButtons,
+    });
+
     ctx.setHealth({ status: "ok" });
   },
 
