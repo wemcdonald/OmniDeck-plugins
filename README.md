@@ -6,8 +6,11 @@ Community plugins for [OmniDeck](https://github.com/wemcdonald/OmniDeck).
 
 | Plugin | Description |
 |--------|-------------|
-| [monitor-control](monitor-control/) | Switch monitor inputs via DDC/CI |
 | [bettertouchtool](bettertouchtool/) | BetterTouchTool integration for macOS |
+| [clock](clock/) | Analog and digital clock display with configurable timezone and colors |
+| [google-meet](google-meet/) | Control Google Meet calls — mute, video, hand raise, reactions, leave |
+| [monitor-control](monitor-control/) | Switch monitor inputs via DDC/CI |
+| [weather](weather/) | Real-time weather and multi-day forecast via Open-Meteo (no API key) |
 | [zoom](zoom/) | Control Zoom meetings — mute, video, share, hand, reactions, recording |
 
 ## Installation
