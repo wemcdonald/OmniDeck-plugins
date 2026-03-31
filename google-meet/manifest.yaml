@@ -1,0 +1,16 @@
+id: google-meet
+name: "Google Meet"
+version: "1.0.0"
+description: |
+  Control Google Meet calls from your deck. Toggle mute, camera, hand raise,
+  captions, leave call, toggle chat, and send emoji reactions.
+
+  Requires the companion Chrome extension — download it from the plugin
+  settings page and load it as an unpacked extension in Chrome.
+hub: hub.ts
+agent: agent.ts
+downloads:
+  - name: chrome-extension
+    label: "Chrome Extension"
+    path: extension/
+    description: "Load as unpacked extension in Chrome (chrome://extensions → Load unpacked)"
