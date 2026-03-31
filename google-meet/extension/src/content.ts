@@ -64,8 +64,45 @@ function findElement(selectors: readonly string[]): HTMLElement | null {
   return null;
 }
 
+/**
+ * Click a Meet button by asking the service worker to execute in the main world.
+ * Content script events have isTrusted=false in the isolated world and Meet's
+ * jsaction framework ignores them. We ask the service worker to use
+ * chrome.scripting.executeScript with world:"MAIN" to click the element.
+ */
+function simulateClick(el: HTMLElement) {
+  // Build a unique selector for the element
+  const jsname = el.getAttribute("jsname");
+  const tag = el.tagName.toLowerCase();
+  let selector: string;
+  if (jsname) {
+    selector = `${tag}[jsname="${jsname}"]`;
+  } else {
+    const dataAction = el.getAttribute("data-mdc-dialog-action");
+    selector = dataAction ? `[data-mdc-dialog-action="${dataAction}"]` : "";
+  }
+  if (!selector) { el.click(); return; }
+
+  // Ask service worker to click in main world
+  // The service worker uses chrome.scripting.executeScript with world: "MAIN"
+  if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+    chrome.runtime.sendMessage({ type: "click", selector }, (resp) => {
+      // Report result back to agent via WebSocket for debugging
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "debug", msg: "click_response", selector, resp, error: chrome.runtime.lastError?.message }));
+      }
+    });
+  } else {
+    // chrome.runtime not available — report and fallback
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "debug", msg: "no_chrome_runtime" }));
+    }
+    el.click();
+  }
+}
+
 function emojiButtonSelector(emoji: string): string {
-  return `button[jsname="vnVdbf"][data-emoji^="${emoji}"]`;
+  return `button[jsname="vnVdbf"][aria-label="${emoji}"]`;
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -134,42 +171,55 @@ function connect() {
 // ── Command Handlers ──────────────────────────────────────────────────────────
 
 function handleCommand(command: string, params?: Record<string, unknown>) {
+  console.log("[OmniDeck] command:", command);
   switch (command) {
-    case "toggle_mute":
-      findElement(SELECTORS.mic)?.click();
+    case "toggle_mute": {
+      const el = findElement(SELECTORS.mic);
+      console.log("[OmniDeck] mic element:", el?.tagName, el?.getAttribute("jsname"));
+      if (el) simulateClick(el);
       break;
+    }
 
-    case "toggle_video":
-      findElement(SELECTORS.camera)?.click();
+    case "toggle_video": {
+      const el = findElement(SELECTORS.camera);
+      console.log("[OmniDeck] camera element:", el?.tagName, el?.getAttribute("jsname"));
+      if (el) simulateClick(el);
       break;
+    }
 
-    case "toggle_hand":
-      findElement(SELECTORS.hand)?.click();
+    case "toggle_hand": {
+      const el = findElement(SELECTORS.hand);
+      console.log("[OmniDeck] hand element:", el?.tagName, el?.getAttribute("jsname"));
+      if (el) simulateClick(el);
       break;
+    }
 
-    case "toggle_captions":
-      findElement(SELECTORS.captions)?.click();
+    case "toggle_captions": {
+      const el = findElement(SELECTORS.captions);
+      if (el) simulateClick(el);
       break;
+    }
 
     case "leave": {
-      // Check if a confirmation dialog is already open
-      const confirm = document.querySelector<HTMLElement>(SELECTORS.leaveConfirm[0]);
-      if (confirm) {
-        confirm.click();
+      const confirmEl = document.querySelector<HTMLElement>(SELECTORS.leaveConfirm[0]);
+      if (confirmEl) {
+        simulateClick(confirmEl);
         break;
       }
-      findElement(SELECTORS.leave)?.click();
-      // If host, a dialog may appear — click confirm after a short delay
+      const leaveEl = findElement(SELECTORS.leave);
+      if (leaveEl) simulateClick(leaveEl);
       setTimeout(() => {
-        const confirmBtn = document.querySelector<HTMLElement>(SELECTORS.leaveConfirm[0]);
-        confirmBtn?.click();
+        const btn = document.querySelector<HTMLElement>(SELECTORS.leaveConfirm[0]);
+        if (btn) simulateClick(btn);
       }, 500);
       break;
     }
 
-    case "toggle_chat":
-      document.querySelector<HTMLElement>(SELECTORS.chatPanel[0])?.click();
+    case "toggle_chat": {
+      const el = document.querySelector<HTMLElement>(SELECTORS.chatPanel[0]);
+      if (el) simulateClick(el);
       break;
+    }
 
     case "emoji_react":
       handleEmojiReact(params);
@@ -182,30 +232,17 @@ function handleCommand(command: string, params?: Record<string, unknown>) {
   }
 }
 
-async function handleEmojiReact(params?: Record<string, unknown>) {
+function handleEmojiReact(params?: Record<string, unknown>) {
   const emoji = (params?.emoji as string) ?? "\u{1F44D}"; // default: thumbsup
+  const selector = emojiButtonSelector(emoji);
 
-  // Try clicking the emoji directly if the panel is already open
-  let emojiBtn = document.querySelector<HTMLElement>(emojiButtonSelector(emoji));
-  if (emojiBtn) {
-    emojiBtn.click();
-    return;
-  }
-
-  // Open the emoji panel first
-  const opener = document.querySelector<HTMLElement>(SELECTORS.emojiPanelOpener[0]);
-  if (!opener) return;
-  opener.click();
-
-  // Wait for the panel to open, then find and click the emoji
-  for (let i = 0; i < 5; i++) {
-    await new Promise((r) => setTimeout(r, 300));
-    emojiBtn = document.querySelector<HTMLElement>(emojiButtonSelector(emoji));
-    if (emojiBtn) {
-      emojiBtn.click();
-      return;
-    }
-  }
+  // Send to service worker — it handles opening the bar and clicking
+  // the specific emoji all within one executeScript call in the main world
+  chrome.runtime.sendMessage({
+    type: "emoji_react",
+    opener: SELECTORS.emojiPanelOpener[0],
+    emoji: selector,
+  });
 }
 
 // ── State Detection ───────────────────────────────────────────────────────────

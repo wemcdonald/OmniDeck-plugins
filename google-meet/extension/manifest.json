@@ -3,9 +3,16 @@
   "name": "OmniDeck Google Meet",
   "version": "1.0.0",
   "description": "Connects Google Meet to OmniDeck for physical button control of mute, camera, hand raise, and more.",
+  "permissions": [
+    "scripting",
+    "alarms"
+  ],
   "host_permissions": [
     "https://meet.google.com/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://meet.google.com/*"],
