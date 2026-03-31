@@ -223,14 +223,19 @@ function renderForecastDay(size: number, data: WeatherData, dayIndex: number, un
 
 // ── Schema ────────────────────────────────────────────────────────────────
 
+const configSchema = z.object({
+  location: field(z.string().optional(), { label: "Default Location", placeholder: "New York, Tokyo, 94102, 51.5,-0.12" }),
+  metric: field(z.boolean().default(false), { label: "Use Celsius (metric)" }),
+});
+
 const currentParams = z.object({
-  location: field(z.string(), { label: "Location", placeholder: "New York, Tokyo, 94102, 51.5,-0.12" }),
-  units: field(z.enum(["fahrenheit", "celsius"]).default("fahrenheit"), { label: "Units" }),
+  location: field(z.string().optional(), { label: "Location", placeholder: "Uses plugin default if blank" }),
+  metric: field(z.boolean().optional(), { label: "Use Celsius (metric)" }),
 });
 
 const forecastParams = z.object({
-  location: field(z.string(), { label: "Location", placeholder: "New York, Tokyo, 94102, 51.5,-0.12" }),
-  units: field(z.enum(["fahrenheit", "celsius"]).default("fahrenheit"), { label: "Units" }),
+  location: field(z.string().optional(), { label: "Location", placeholder: "Uses plugin default if blank" }),
+  metric: field(z.boolean().optional(), { label: "Use Celsius (metric)" }),
   day: field(z.number().int().min(0).max(6).default(1), { label: "Day Offset (0=today)" }),
 });
 
@@ -241,8 +246,10 @@ export const weatherPlugin: OmniDeckPlugin = {
   name: "Weather",
   version: "1.0.0",
   icon: "ms:partly-cloudy-day",
+  configSchema,
 
   async init(ctx: PluginContext) {
+    const pluginConfig = configSchema.parse(ctx.config ?? {});
     // Refresh state every 10 minutes to pick up new weather data
     setInterval(() => {
       ctx.state.set("weather", "tick", Date.now());
@@ -265,7 +272,18 @@ export const weatherPlugin: OmniDeckPlugin = {
         { key: "location", label: "Location", example: "San Francisco, US" },
       ],
       resolve(params) {
-        const p = currentParams.parse(params);
+        const raw = currentParams.parse(params);
+        const metric = raw.metric ?? pluginConfig.metric;
+        const p = {
+          location: raw.location || pluginConfig.location || "",
+          units: (metric ? "celsius" : "fahrenheit") as "celsius" | "fahrenheit",
+        };
+        if (!p.location) {
+          return {
+            state: { icon: "ms:partly-cloudy-day", iconColor: "#94a3b8", opacity: 0.3 },
+            variables: { temp: "--", feels_like: "--", condition: "No location set", humidity: "--", location: "" },
+          };
+        }
         const cacheKey = `${p.location.toLowerCase()},${p.units}`;
         const cached = weatherCache.get(cacheKey) ?? [...weatherCache.values()].find(
           (w) => w.locationName.toLowerCase().includes(p.location.toLowerCase())
@@ -323,7 +341,19 @@ export const weatherPlugin: OmniDeckPlugin = {
         { key: "condition", label: "Condition", example: "Rainy" },
       ],
       resolve(params) {
-        const p = forecastParams.parse(params);
+        const raw = forecastParams.parse(params);
+        const metric = raw.metric ?? pluginConfig.metric;
+        const p = {
+          location: raw.location || pluginConfig.location || "",
+          units: (metric ? "celsius" : "fahrenheit") as "celsius" | "fahrenheit",
+          day: raw.day,
+        };
+        if (!p.location) {
+          return {
+            state: { icon: "ms:calendar-today", iconColor: "#94a3b8", opacity: 0.3 },
+            variables: { day: "--", hi: "--", lo: "--", condition: "No location set" },
+          };
+        }
 
         geocode(p.location).then((geo) => {
           if (!geo) return;
