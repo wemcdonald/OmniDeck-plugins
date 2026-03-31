@@ -1,0 +1,7 @@
+id: clock
+name: "Clock"
+version: "1.0.0"
+description: |
+  Display the current time on your deck. Supports analog clock face
+  and digital display modes with customizable colors and time zones.
+hub: hub.ts
