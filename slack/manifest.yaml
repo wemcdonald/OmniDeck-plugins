@@ -1,0 +1,9 @@
+id: slack
+name: "Slack"
+version: "1.0.0"
+description: |
+  Slack integration for OmniDeck. Shows unread counts, opens channels and
+  DMs with one press, and controls Do Not Disturb. Supports multiple
+  workspaces. Requires a Slack user token (xoxp-).
+hub: hub.ts
+agent: agent.ts
