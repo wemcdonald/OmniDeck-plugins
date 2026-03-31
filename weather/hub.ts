@@ -294,7 +294,7 @@ export const weatherPlugin: OmniDeckPlugin = {
         const lo = formatTemp(cached.daily.temperature_2m_min[0], p.units);
 
         return {
-          state: { icon },
+          state: { icon, iconFullBleed: true },
           variables: {
             temp: formatTemp(c.temperature_2m, p.units),
             feels_like: formatTemp(c.apparent_temperature, p.units),
@@ -346,7 +346,7 @@ export const weatherPlugin: OmniDeckPlugin = {
         const info = wmoInfo(d.weather_code[idx]);
 
         return {
-          state: { icon },
+          state: { icon, iconFullBleed: true },
           variables: {
             day: shortDayName(d.time[idx]),
             hi: formatTemp(d.temperature_2m_max[idx], p.units),

@@ -189,7 +189,7 @@ export const clockPlugin: OmniDeckPlugin = {
           : renderAnalogClock(size, fg, bg, p.seconds_hand, tz);
 
         return {
-          state: { icon },
+          state: { icon, iconFullBleed: true },
           variables: {
             time: formatTime(tz, true),
             time_short: formatTime(tz, false),
