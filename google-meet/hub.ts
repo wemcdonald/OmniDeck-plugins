@@ -427,19 +427,16 @@ export const googleMeetPlugin: OmniDeckPlugin = {
 
     const emojiButtons = EMOJIS.map((e, i) => ({
       pos: [i % 5, Math.floor(i / 5)],
-      action: "google-meet.emoji_react",
-      params: { emoji: e.emoji },
+      action: "omnideck-core.multi_action",
+      params: {
+        mode: "sequential",
+        actions: [
+          { action: "google-meet.emoji_react", params: { emoji: e.emoji } },
+          { action: "omnideck-core.go_back" },
+        ],
+      },
       icon: e.emoji,
-      label: e.label,
     }));
-
-    emojiButtons.push({
-      pos: [4, 2],
-      action: "omnideck-core.go_back",
-      params: {},
-      icon: "ms:arrow-back",
-      label: "Back",
-    });
 
     ctx.scaffoldPage("meet-emoji", {
       page: "meet-emoji",
