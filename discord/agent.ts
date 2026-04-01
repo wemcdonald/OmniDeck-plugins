@@ -145,7 +145,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
       code,
       client_id: clientId,
       client_secret: clientSecret,
-      redirect_uri: "http://localhost",
+      redirect_uri: "http://localhost:1337/callback",
     });
     const res = await fetch("https://discord.com/api/oauth2/token", {
       method: "POST",
