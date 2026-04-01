@@ -1,0 +1,9 @@
+id: discord
+name: "Discord"
+version: "1.0.0"
+description: |
+  Control Discord voice, video, and streaming from your deck. Mute, deafen,
+  join/leave voice channels, toggle video/screenshare, per-user volume mixer,
+  and text channel shortcuts. Uses Discord's local RPC API.
+hub: hub.ts
+agent: agent.ts
