@@ -8,6 +8,7 @@ Community plugins for [OmniDeck](https://github.com/wemcdonald/OmniDeck).
 |--------|-------------|
 | [bettertouchtool](bettertouchtool/) | BetterTouchTool integration for macOS |
 | [clock](clock/) | Analog and digital clock display with configurable timezone and colors |
+| [counter](counter/) | Tap to count up, long press to reset — customizable styling |
 | [google-meet](google-meet/) | Control Google Meet calls — mute, video, hand raise, reactions, leave |
 | [monitor-control](monitor-control/) | Switch monitor inputs via DDC/CI |
 | [slack](slack/) | Unread counts, open channels/DMs, DND control — multi-workspace |
