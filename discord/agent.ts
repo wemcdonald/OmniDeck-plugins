@@ -30,14 +30,34 @@ const EMPTY_STATE: DiscordState = {
 };
 
 export default function init(omnideck: OmniDeck) {
-  const clientId = omnideck.config.client_id as string;
-  const clientSecret = omnideck.config.client_secret as string;
+  let clientId = omnideck.config.client_id as string;
+  let clientSecret = omnideck.config.client_secret as string;
 
+  function startConnection(id: string, secret: string) {
+    // Main connection logic (extracted below)
+    runDiscordPlugin(omnideck, id, secret);
+  }
+
+  // If config not available at init, wait for reload (config is sent after plugin loads)
   if (!clientId || !clientSecret) {
-    omnideck.log.warn("Discord plugin: client_id and client_secret are required");
+    omnideck.log.warn("Discord plugin: waiting for config reload with client_id and client_secret");
     omnideck.setState("discord", { ...EMPTY_STATE });
+    omnideck.onReloadConfig((newConfig) => {
+      const newId = newConfig.client_id as string;
+      const newSecret = newConfig.client_secret as string;
+      if (newId && newSecret && !clientId) { // only start once
+        clientId = newId;
+        clientSecret = newSecret;
+        startConnection(newId, newSecret);
+      }
+    });
     return;
   }
+
+  startConnection(clientId, clientSecret);
+}
+
+function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: string) {
 
   let state: DiscordState = { ...EMPTY_STATE };
   let ws: WebSocket | null = null;
