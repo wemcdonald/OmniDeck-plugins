@@ -1,6 +1,9 @@
 // plugins/discord/agent.ts
-// Connects to Discord's local RPC WebSocket API to control voice, video, and streaming.
+// Connects to Discord's local RPC via Unix domain socket (IPC).
+// IPC is more reliable than the WebSocket transport and doesn't require
+// Discord to listen on specific TCP ports.
 
+import net from "net";
 import type { OmniDeck } from "@omnideck/agent-sdk";
 
 interface DiscordState {
@@ -60,10 +63,11 @@ export default function init(omnideck: OmniDeck) {
 function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: string) {
 
   let state: DiscordState = { ...EMPTY_STATE };
-  let ws: WebSocket | null = null;
+  let ipc: net.Socket | null = null;
   let nonceCounter = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let subscribedChannelId: string | null = null;
+  let ipcReadBuf = Buffer.alloc(0);
 
   // Pending command callbacks
   const pending = new Map<string, { resolve: (data: any) => void; reject: (err: Error) => void }>();
@@ -95,11 +99,22 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
     await omnideck.exec("sh", ["-c", `mkdir -p "${omnideck.dataDir}" && cat > "${tokenPath}" << 'TOKENEOF'\n${data}\nTOKENEOF`]);
   }
 
+  // ── IPC framing helpers ─────────────────────────────────────────────────
+
+  function ipcSendRaw(opcode: number, payload: string) {
+    if (!ipc) return;
+    const buf = Buffer.alloc(8 + Buffer.byteLength(payload));
+    buf.writeUInt32LE(opcode, 0);
+    buf.writeUInt32LE(Buffer.byteLength(payload), 4);
+    buf.write(payload, 8);
+    ipc.write(buf);
+  }
+
   // ── RPC command helper ──────────────────────────────────────────────────
 
   function send(cmd: string, args: Record<string, unknown> = {}, evt?: string): Promise<any> {
     return new Promise((resolve, reject) => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
+      if (!ipc) {
         reject(new Error("Not connected"));
         return;
       }
@@ -107,8 +122,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
       const msg: Record<string, unknown> = { cmd, nonce, args };
       if (evt) msg.evt = evt;
       pending.set(nonce, { resolve, reject });
-      ws.send(JSON.stringify(msg));
-      // Timeout
+      ipcSendRaw(1, JSON.stringify(msg)); // opcode 1 = FRAME
       setTimeout(() => {
         if (pending.has(nonce)) {
           pending.delete(nonce);
@@ -120,7 +134,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
 
   function subscribe(evt: string, args: Record<string, unknown> = {}) {
     const nonce = nextNonce();
-    ws?.send(JSON.stringify({ cmd: "SUBSCRIBE", nonce, evt, args }));
+    ipcSendRaw(1, JSON.stringify({ cmd: "SUBSCRIBE", nonce, evt, args }));
   }
 
   // ── OAuth2 token exchange ───────────────────────────────────────────────
@@ -278,104 +292,131 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
     }
   }
 
-  // ── WebSocket connection ────────────────────────────────────────────────
+  // ── IPC connection ──────────────────────────────────────────────────────
+
+  function getIpcPaths(): string[] {
+    const paths: string[] = [];
+    const base = process.env.TMPDIR ?? process.env.TMP ?? process.env.TEMP ?? "/tmp";
+    const xdgRuntime = process.env.XDG_RUNTIME_DIR;
+    for (let i = 0; i <= 9; i++) {
+      if (xdgRuntime) paths.push(`${xdgRuntime}/discord-ipc-${i}`);
+      paths.push(`${base}discord-ipc-${i}`);
+      paths.push(`/tmp/discord-ipc-${i}`);
+    }
+    return [...new Set(paths)];
+  }
 
   async function connect() {
-    for (let port = 6463; port <= 6472; port++) {
+    const paths = getIpcPaths();
+    for (const socketPath of paths) {
       try {
-        await tryConnect(port);
+        await tryConnectIpc(socketPath);
         return;
       } catch {
         continue;
       }
     }
-    omnideck.log.warn("Could not connect to Discord RPC on any port");
+    omnideck.log.warn("Could not connect to Discord RPC on any socket path");
     state = { ...EMPTY_STATE };
     pushState();
     scheduleReconnect();
   }
 
-  function tryConnect(port: number): Promise<void> {
+  function handleIpcMessage(msg: any) {
+    // Handle READY event
+    if (msg.evt === "READY" && msg.cmd === "DISPATCH") {
+      state.connected = true;
+      state.username = msg.data?.user?.username ?? "";
+      omnideck.log.info("Discord RPC connected via IPC", { user: state.username });
+
+      authenticate()
+        .then(() => {
+          subscribe("VOICE_SETTINGS_UPDATE");
+          subscribe("VOICE_CHANNEL_SELECT");
+          subscribe("VOICE_CONNECTION_STATUS");
+          return syncVoiceSettings();
+        })
+        .then(() => syncVoiceChannel())
+        .then(() => pushState())
+        .catch((err) => {
+          omnideck.log.error("Auth failed", { err: String(err) });
+          state.authenticated = false;
+          pushState();
+        });
+      return;
+    }
+
+    // Handle event dispatches
+    if (msg.cmd === "DISPATCH" && msg.evt) {
+      handleEvent(msg.evt, msg.data);
+      return;
+    }
+
+    // Handle command responses
+    if (msg.nonce && pending.has(msg.nonce)) {
+      const p = pending.get(msg.nonce)!;
+      pending.delete(msg.nonce);
+      if (msg.evt === "ERROR") {
+        p.reject(new Error(msg.data?.message ?? "RPC error"));
+      } else {
+        p.resolve(msg.data);
+      }
+    }
+  }
+
+  function tryConnectIpc(socketPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const url = `ws://127.0.0.1:${port}/?v=1&client_id=${clientId}&encoding=json`;
-      const socket = new WebSocket(url);
+      const socket = net.createConnection(socketPath);
       const timeout = setTimeout(() => {
-        socket.close();
+        socket.destroy();
         reject(new Error("timeout"));
       }, 3000);
 
-      socket.onopen = () => {
-        // Wait for READY event
-      };
-
-      socket.onmessage = async (event) => {
-        try {
-          const msg = JSON.parse(String(event.data));
-
-          // Handle READY event (first message after connect)
-          if (msg.evt === "READY" && msg.cmd === "DISPATCH") {
-            clearTimeout(timeout);
-            ws = socket;
-            state.connected = true;
-            state.username = msg.data?.user?.username ?? "";
-            omnideck.log.info(`Discord RPC connected on port ${port}`, { user: state.username });
-
-            try {
-              await authenticate();
-              subscribe("VOICE_SETTINGS_UPDATE");
-              subscribe("VOICE_CHANNEL_SELECT");
-              subscribe("VOICE_CONNECTION_STATUS");
-              await syncVoiceSettings();
-              await syncVoiceChannel();
-              pushState();
-            } catch (err) {
-              omnideck.log.error("Auth failed", { err: String(err) });
-              state.authenticated = false;
-              pushState();
-            }
-            resolve();
-            return;
-          }
-
-          // Handle event dispatches
-          if (msg.cmd === "DISPATCH" && msg.evt) {
-            handleEvent(msg.evt, msg.data);
-            return;
-          }
-
-          // Handle command responses
-          if (msg.nonce && pending.has(msg.nonce)) {
-            const p = pending.get(msg.nonce)!;
-            pending.delete(msg.nonce);
-            if (msg.evt === "ERROR") {
-              p.reject(new Error(msg.data?.message ?? "RPC error"));
-            } else {
-              p.resolve(msg.data);
-            }
-          }
-        } catch (err) {
-          omnideck.log.error("RPC message parse error", { err: String(err) });
-        }
-      };
-
-      socket.onclose = () => {
+      socket.once("connect", () => {
         clearTimeout(timeout);
-        if (ws === socket) {
-          ws = null;
+        ipc = socket;
+        ipcReadBuf = Buffer.alloc(0);
+        // Send handshake (opcode 0 = HANDSHAKE)
+        ipcSendRaw(0, JSON.stringify({ v: 1, client_id: clientId }));
+        resolve();
+      });
+
+      socket.on("data", (data) => {
+        ipcReadBuf = Buffer.concat([ipcReadBuf, data]);
+        // Process all complete frames
+        while (ipcReadBuf.length >= 8) {
+          const len = ipcReadBuf.readUInt32LE(4);
+          if (ipcReadBuf.length < 8 + len) break;
+          const payload = ipcReadBuf.slice(8, 8 + len).toString();
+          ipcReadBuf = ipcReadBuf.slice(8 + len);
+          try {
+            handleIpcMessage(JSON.parse(payload));
+          } catch {
+            // Ignore parse errors
+          }
+        }
+      });
+
+      socket.on("close", () => {
+        if (ipc === socket) {
+          ipc = null;
           state.connected = false;
           state.authenticated = false;
-          omnideck.log.info("Discord RPC disconnected");
+          omnideck.log.info("Discord IPC disconnected");
           pushState();
           scheduleReconnect();
-        } else {
-          reject(new Error("closed"));
         }
-      };
+      });
 
-      socket.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error("error"));
-      };
+      socket.on("error", (err) => {
+        if (ipc === socket) {
+          ipc = null;
+          omnideck.log.warn({ err: err.message }, "Discord IPC error");
+          scheduleReconnect();
+        } else {
+          reject(err);
+        }
+      });
     });
   }
 
@@ -530,7 +571,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
 
   omnideck.onDestroy(() => {
     if (reconnectTimer) clearTimeout(reconnectTimer);
-    ws?.close();
-    ws = null;
+    ipc?.destroy();
+    ipc = null;
   });
 }
