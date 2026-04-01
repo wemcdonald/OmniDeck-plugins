@@ -339,10 +339,16 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
           subscribe("VOICE_SETTINGS_UPDATE");
           subscribe("VOICE_CHANNEL_SELECT");
           subscribe("VOICE_CONNECTION_STATUS");
-          return syncVoiceSettings();
+          omnideck.log.info("Subscribed to Discord events, syncing state...");
+          syncVoiceSettings()
+            .then(() => syncVoiceChannel())
+            .then(() => {
+              omnideck.log.info("Discord state synced", { muted: state.muted, channel: state.voiceChannelName });
+              pushState();
+            })
+            .catch((err) => omnideck.log.warn({ err: String(err) }, "Voice sync failed (non-fatal)"));
+          pushState(); // Push immediately with basic connected state
         })
-        .then(() => syncVoiceChannel())
-        .then(() => pushState())
         .catch((err) => {
           omnideck.log.error("Auth failed", { err: String(err) });
           state.authenticated = false;
