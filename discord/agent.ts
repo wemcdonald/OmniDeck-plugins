@@ -342,6 +342,10 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
           omnideck.log.error("Auth failed", { err: String(err) });
           state.authenticated = false;
           pushState();
+          // Disconnect and retry — this will re-show the auth dialog
+          ipc?.destroy();
+          ipc = null;
+          scheduleReconnect();
         });
       return;
     }
