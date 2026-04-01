@@ -201,7 +201,7 @@ export const discordPlugin: OmniDeckPlugin = {
 
         if (!s?.connected) {
           return {
-            state: { icon: "ms:headset-off", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:headset-off", iconColor: "#4b5563" },
             variables: { channel: "", guild: "", status: "Disconnected" },
           };
         }
@@ -239,7 +239,7 @@ export const discordPlugin: OmniDeckPlugin = {
 
         if (!s?.connected) {
           return {
-            state: { icon: "ms:mic-off", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:mic-off", iconColor: "#4b5563" },
             variables: { mute_state: "" },
           };
         }
@@ -273,7 +273,7 @@ export const discordPlugin: OmniDeckPlugin = {
 
         if (!s?.connected) {
           return {
-            state: { icon: "ms:headphones-off", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:headphones", iconColor: "#4b5563" },
             variables: { deafen_state: "" },
           };
         }
@@ -307,7 +307,7 @@ export const discordPlugin: OmniDeckPlugin = {
 
         if (!s?.connected || !s.voiceChannelId) {
           return {
-            state: { icon: "ms:videocam-off", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:videocam-off", iconColor: "#4b5563" },
             variables: { video_state: "" },
           };
         }
@@ -335,7 +335,7 @@ export const discordPlugin: OmniDeckPlugin = {
 
         if (!s?.connected || !s.voiceChannelId) {
           return {
-            state: { icon: "ms:stop-screen-share", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:stop-screen-share", iconColor: "#4b5563" },
             variables: { stream_state: "" },
           };
         }

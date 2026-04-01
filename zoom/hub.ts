@@ -94,7 +94,7 @@ export const zoomPlugin: OmniDeckPlugin = {
 
         if (!meeting || !meeting.running) {
           return {
-            state: { icon: "ms:videocam-off", label: "Offline", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:videocam-off", label: "Offline", iconColor: "#6b7280" },
             variables: { status: "Offline", in_meeting: "false" },
           };
         }
@@ -130,7 +130,7 @@ export const zoomPlugin: OmniDeckPlugin = {
 
         if (!meeting?.inMeeting) {
           return {
-            state: { icon: "ms:mic-off", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:mic-off", iconColor: "#6b7280" },
             variables: { mute_state: "" },
           };
         }
@@ -173,7 +173,7 @@ export const zoomPlugin: OmniDeckPlugin = {
 
         if (!meeting?.inMeeting) {
           return {
-            state: { icon: "ms:videocam-off", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:videocam-off", iconColor: "#6b7280" },
             variables: { video_state: "" },
           };
         }
@@ -215,7 +215,7 @@ export const zoomPlugin: OmniDeckPlugin = {
 
         if (!meeting?.inMeeting) {
           return {
-            state: { icon: "ms:stop-screen-share", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:stop-screen-share", iconColor: "#6b7280" },
             variables: { share_state: "" },
           };
         }
@@ -251,7 +251,7 @@ export const zoomPlugin: OmniDeckPlugin = {
 
         if (!meeting?.inMeeting) {
           return {
-            state: { icon: "ms:back-hand", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:back-hand", iconColor: "#6b7280" },
             variables: { hand_state: "" },
           };
         }
@@ -287,7 +287,7 @@ export const zoomPlugin: OmniDeckPlugin = {
 
         if (!meeting?.inMeeting) {
           return {
-            state: { icon: "ms:fiber-manual-record", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:fiber-manual-record", iconColor: "#6b7280" },
             variables: { recording_state: "" },
           };
         }

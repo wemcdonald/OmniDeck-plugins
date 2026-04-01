@@ -666,7 +666,7 @@ export const slackPlugin: OmniDeckPlugin = {
         const ws = p.workspace ? getWorkspace(p.workspace) : getWorkspace();
         if (!ws?.ready) {
           return {
-            state: { icon: "ms:tag", iconColor: "#616061", opacity: 0.4 },
+            state: { icon: "ms:tag", iconColor: "#6b7280" },
             variables: { name: p.channel, unread: "0" },
           };
         }
@@ -716,7 +716,7 @@ export const slackPlugin: OmniDeckPlugin = {
         const ws = p.workspace ? getWorkspace(p.workspace) : getWorkspace();
         if (!ws?.ready) {
           return {
-            state: { icon: "ms:person", iconColor: "#616061", opacity: 0.4 },
+            state: { icon: "ms:person", iconColor: "#6b7280" },
             variables: { name: p.user, unread: "0" },
           };
         }
@@ -766,7 +766,7 @@ export const slackPlugin: OmniDeckPlugin = {
 
         if (!ws?.ready) {
           return {
-            state: { icon: "ms:notifications", iconColor: "#616061", opacity: 0.4 },
+            state: { icon: "ms:notifications", iconColor: "#6b7280" },
             variables: { dnd_state: "", snooze_remaining: "" },
           };
         }

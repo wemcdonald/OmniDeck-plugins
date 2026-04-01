@@ -100,7 +100,7 @@ export const googleMeetPlugin: OmniDeckPlugin = {
 
         if (!meet || !meet.extensionConnected) {
           return {
-            state: { icon: "ms:videocam-off", label: "Disconnected", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:videocam-off", label: "Disconnected", iconColor: "#6b7280" },
             variables: { status: "Disconnected", in_call: "false" },
           };
         }
@@ -136,7 +136,7 @@ export const googleMeetPlugin: OmniDeckPlugin = {
 
         if (!meet?.inCall) {
           return {
-            state: { icon: "ms:mic-off", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:mic-off", iconColor: "#6b7280" },
             variables: { mute_state: "" },
           };
         }
@@ -178,7 +178,7 @@ export const googleMeetPlugin: OmniDeckPlugin = {
 
         if (!meet?.inCall) {
           return {
-            state: { icon: "ms:videocam-off", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:videocam-off", iconColor: "#6b7280" },
             variables: { video_state: "" },
           };
         }
@@ -220,7 +220,7 @@ export const googleMeetPlugin: OmniDeckPlugin = {
 
         if (!meet?.inCall) {
           return {
-            state: { icon: "ms:back-hand", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:back-hand", iconColor: "#6b7280" },
             variables: { hand_state: "" },
           };
         }
@@ -256,7 +256,7 @@ export const googleMeetPlugin: OmniDeckPlugin = {
 
         if (!meet?.inCall) {
           return {
-            state: { icon: "ms:closed-caption-disabled", iconColor: "#6b7280", opacity: 0.4 },
+            state: { icon: "ms:closed-caption-disabled", iconColor: "#6b7280" },
             variables: { captions_state: "" },
           };
         }
@@ -293,7 +293,7 @@ export const googleMeetPlugin: OmniDeckPlugin = {
 
         if (!meet?.extensionConnected) {
           return {
-            state: { opacity: 0.4 },
+            state: { iconColor: "#6b7280" },
             variables: { status: "Disconnected", in_call: "false" },
           };
         }
