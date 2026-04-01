@@ -4,6 +4,8 @@
 // Discord to listen on specific TCP ports.
 
 import net from "net";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { dirname } from "path";
 import type { OmniDeck } from "@omnideck/agent-sdk";
 
 interface DiscordState {
@@ -84,19 +86,22 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
 
   const tokenPath = `${omnideck.dataDir}/discord-token.json`;
 
-  async function loadToken(): Promise<{ access_token: string; refresh_token: string } | null> {
+  function loadToken(): { access_token: string; refresh_token: string } | null {
     try {
-      const r = await omnideck.exec("cat", [tokenPath]);
-      if (r.exitCode !== 0) return null;
-      return JSON.parse(r.stdout);
+      if (!existsSync(tokenPath)) return null;
+      return JSON.parse(readFileSync(tokenPath, "utf-8"));
     } catch {
       return null;
     }
   }
 
-  async function saveToken(access_token: string, refresh_token: string) {
-    const data = JSON.stringify({ access_token, refresh_token });
-    await omnideck.exec("sh", ["-c", `mkdir -p "${omnideck.dataDir}" && cat > "${tokenPath}" << 'TOKENEOF'\n${data}\nTOKENEOF`]);
+  function saveToken(access_token: string, refresh_token: string) {
+    try {
+      mkdirSync(dirname(tokenPath), { recursive: true });
+      writeFileSync(tokenPath, JSON.stringify({ access_token, refresh_token }));
+    } catch (err) {
+      omnideck.log.warn({ err: String(err) }, "Failed to save Discord token");
+    }
   }
 
   // ── IPC framing helpers ─────────────────────────────────────────────────
@@ -176,7 +181,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
 
   async function authenticate() {
     // Try cached token first
-    const cached = await loadToken();
+    const cached = loadToken();
     if (cached) {
       try {
         await send("AUTHENTICATE", { access_token: cached.access_token });
@@ -187,7 +192,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
         // Token expired, try refresh
         try {
           const refreshed = await refreshToken(cached.refresh_token);
-          await saveToken(refreshed.access_token, refreshed.refresh_token);
+          saveToken(refreshed.access_token, refreshed.refresh_token);
           await send("AUTHENTICATE", { access_token: refreshed.access_token });
           state.authenticated = true;
           omnideck.log.info("Authenticated with refreshed token");
@@ -204,7 +209,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
     const code = authResult.code as string;
 
     const tokens = await exchangeCode(code);
-    await saveToken(tokens.access_token, tokens.refresh_token);
+    saveToken(tokens.access_token, tokens.refresh_token);
     await send("AUTHENTICATE", { access_token: tokens.access_token });
     state.authenticated = true;
     omnideck.log.info("Authenticated with fresh token");
