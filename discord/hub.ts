@@ -39,11 +39,17 @@ const dndDurationParams = z.object({
   duration: field(z.number().default(60), { label: "Snooze Duration (minutes)" }),
 });
 
+const discordConfigSchema = z.object({
+  client_id: field(z.string().optional(), { label: "Client ID" }),
+  client_secret: field(z.string().optional(), { label: "Client Secret" }),
+});
+
 export const discordPlugin: OmniDeckPlugin = {
   id: "discord",
   name: "Discord",
   version: "1.0.0",
   icon: "ms:headset-mic",
+  configSchema: discordConfigSchema,
 
   async init(ctx: PluginContext) {
     // ── Helpers ────────────────────────────────────────────────────────────

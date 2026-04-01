@@ -25,11 +25,16 @@ const targetParam = {
   target: field(z.string().optional(), { label: "Target", fieldType: "agent" as const }),
 };
 
+const configSchema = z.object({
+  default_target: field(z.string().optional(), { label: "Default Agent", fieldType: "agent" as const }),
+});
+
 export const monitorControlPlugin: OmniDeckPlugin = {
   id: "monitor-control",
   name: "Monitor Control",
   version: "1.0.0",
   icon: "ms:monitor",
+  configSchema,
 
   async init(ctx: PluginContext) {
     const config = ctx.config as MonitorControlConfig;

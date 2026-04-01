@@ -415,6 +415,13 @@ const dmViewParams = z.object({
 });
 const dndViewParams = z.object({ ...workspaceParam });
 
+// ── Config Schema ─────────────────────────────────────────────────────────
+
+const slackConfigSchema = z.object({
+  token: field(z.string().optional(), { label: "User Token", placeholder: "xoxp-..." }),
+  poll_interval: field(z.string().default("60s").optional(), { label: "Poll Interval", placeholder: "60s" }),
+});
+
 // ── Plugin ────────────────────────────────────────────────────────────────
 
 function parseDuration(s: string): number {
@@ -433,6 +440,7 @@ export const slackPlugin: OmniDeckPlugin = {
   name: "Slack",
   version: "1.0.0",
   icon: "ms:chat",
+  configSchema: slackConfigSchema,
 
   async init(ctx: PluginContext) {
     const config = ctx.config as Record<string, unknown>;
