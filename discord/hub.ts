@@ -54,17 +54,16 @@ export const discordPlugin: OmniDeckPlugin = {
   async init(ctx: PluginContext) {
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    let activeAgent: string | undefined;
-
     function resolveTarget(params: Record<string, unknown>, actionCtx: { focusedAgent?: string }) {
-      return (params.target as string | undefined) ?? actionCtx.focusedAgent ?? activeAgent;
+      // Prefer explicit target > focused agent > last active agent from state store
+      return (params.target as string | undefined)
+        ?? actionCtx.focusedAgent
+        ?? (ctx.state.get("discord", "active_agent") as string | undefined);
     }
 
     function getState(target: string | undefined): DiscordState | undefined {
       if (!target) return undefined;
-      const s = ctx.state.get("discord", `agent:${target}:discord`) as DiscordState | undefined;
-      if (s?.connected) activeAgent = target;
-      return s;
+      return ctx.state.get("discord", `agent:${target}:discord`) as DiscordState | undefined;
     }
 
     function registerAgentAction(

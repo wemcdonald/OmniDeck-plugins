@@ -25,19 +25,15 @@ export const googleMeetPlugin: OmniDeckPlugin = {
   icon: "ms:videocam",
 
   async init(ctx: PluginContext) {
-    // Track which agent has an active Meet connection (for target-less buttons like the emoji page)
-    let activeAgent: string | undefined;
-
     function resolveTarget(params: Record<string, unknown>, actionCtx: { focusedAgent?: string }) {
-      return (params.target as string | undefined) ?? actionCtx.focusedAgent ?? activeAgent;
+      return (params.target as string | undefined)
+        ?? actionCtx.focusedAgent
+        ?? (ctx.state.get("google-meet", "active_agent") as string | undefined);
     }
 
     function getMeetState(target: string | undefined): GoogleMeetState | undefined {
       if (!target) return undefined;
-      const state = ctx.state.get("google-meet", `agent:${target}:meeting`) as GoogleMeetState | undefined;
-      // Track the active agent for target-less buttons
-      if (state?.extensionConnected) activeAgent = target;
-      return state;
+      return ctx.state.get("google-meet", `agent:${target}:meeting`) as GoogleMeetState | undefined;
     }
 
     // ── Actions ──────────────────────────────────────────────────────────
