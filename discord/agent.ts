@@ -448,11 +448,16 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
   omnideck.onAction("toggle_mute", async () => {
     if (!state.authenticated) return { success: false, error: "Not connected to Discord" };
     try {
-      await send("SET_VOICE_SETTINGS", { mute: !state.muted });
-      state.muted = !state.muted;
+      const newMute = !state.muted;
+      state.muted = newMute; // optimistic update before IPC round-trip
       pushState();
+      await send("SET_VOICE_SETTINGS", { mute: newMute });
+      // State will be confirmed/corrected by VOICE_SETTINGS_UPDATE event
       return { success: true };
     } catch (err) {
+      // Revert optimistic update on failure
+      state.muted = !state.muted;
+      pushState();
       return { success: false, error: String(err) };
     }
   });
@@ -460,11 +465,15 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
   omnideck.onAction("toggle_deafen", async () => {
     if (!state.authenticated) return { success: false, error: "Not connected to Discord" };
     try {
-      await send("SET_VOICE_SETTINGS", { deaf: !state.deafened });
-      state.deafened = !state.deafened;
+      const newDeaf = !state.deafened;
+      state.deafened = newDeaf; // optimistic update
+      if (newDeaf) state.muted = true; // deafen also mutes
       pushState();
+      await send("SET_VOICE_SETTINGS", { deaf: newDeaf });
       return { success: true };
     } catch (err) {
+      state.deafened = !state.deafened;
+      pushState();
       return { success: false, error: String(err) };
     }
   });
@@ -514,10 +523,10 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
   omnideck.onAction("toggle_ptt_mode", async () => {
     if (!state.authenticated) return { success: false, error: "Not connected" };
     const newMode = state.voiceMode === "PUSH_TO_TALK" ? "VOICE_ACTIVITY" : "PUSH_TO_TALK";
+    state.voiceMode = newMode; // optimistic
+    pushState();
     try {
       await send("SET_VOICE_SETTINGS", { mode: { type: newMode } });
-      state.voiceMode = newMode;
-      pushState();
       return { success: true };
     } catch (err) {
       return { success: false, error: String(err) };
