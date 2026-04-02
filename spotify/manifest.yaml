@@ -1,0 +1,8 @@
+id: spotify
+name: "Spotify"
+version: "1.0.0"
+description: |
+  Control Spotify playback from your Stream Deck. Play/pause, shuffle, repeat,
+  volume control, album art display, and scrolling track info.
+hub: hub.ts
+agent: agent.ts
