@@ -97,17 +97,17 @@ export const discordPlugin: OmniDeckPlugin = {
     // ── Actions ────────────────────────────────────────────────────────────
 
     registerAgentAction("toggle_mute", "Toggle Mute", "Mute or unmute your microphone", "ms:mic");
-    registerAgentAction("toggle_deafen", "Toggle Deafen", "Toggle deafen on or off", "ms:headphones");
+    registerAgentAction("toggle_deafen", "Toggle Deafen", "Toggle deafen on or off", "ms:hearing");
     registerAgentAction("toggle_video", "Toggle Video", "Turn camera on or off", "ms:videocam");
     registerAgentAction("toggle_stream", "Toggle Stream", "Start or stop screenshare", "ms:screen-share");
-    registerAgentAction("toggle_ptt_mode", "Toggle PTT Mode", "Switch between Voice Activity and Push to Talk", "ms:record-voice-over");
+    registerAgentAction("toggle_ptt_mode", "Toggle PTT Mode", "Switch between Voice Activity and Push to Talk", "ms:keyboard-voice");
     registerAgentAction("leave_voice", "Leave Voice", "Leave the current voice channel", "ms:call-end");
 
     ctx.registerAction({
       id: "join_voice",
       name: "Join Voice",
       description: "Join a specific voice channel",
-      icon: "ms:headset-mic",
+      icon: "ms:spatial-audio",
       paramsSchema: voiceChannelParams,
       async execute(params, actionCtx) {
         const p = voiceChannelParams.parse(params);
@@ -272,8 +272,8 @@ export const discordPlugin: OmniDeckPlugin = {
 
         if (!s?.connected) {
           return {
-            state: { icon: "ms:headphones", iconColor: "#4b5563" },
-            variables: { deafen_state: "" },
+            state: { icon: "ms:hearing", iconColor: "#4b5563" },
+            variables: { deafen_state: "Undeafened" },
           };
         }
         if (s.deafened) {
@@ -283,8 +283,8 @@ export const discordPlugin: OmniDeckPlugin = {
           };
         }
         return {
-          state: { icon: "ms:headphones", iconColor: "#22c55e" },
-          variables: { deafen_state: "" },
+          state: { icon: "ms:hearing", iconColor: "#22c55e" },
+          variables: { deafen_state: "Undeafened" },
         };
       },
     });
@@ -458,10 +458,10 @@ export const discordPlugin: OmniDeckPlugin = {
       name: "Deafen",
       description: "Toggle audio deafen",
       category: "Voice",
-      icon: "ms:headphones",
+      icon: "ms:hearing",
       action: "toggle_deafen",
       stateProvider: "deafen_status",
-      defaults: { icon: "ms:headphones", label: "{{deafen_state}}" },
+      defaults: { icon: "ms:hearing", label: "{{deafen_state}}" },
     });
 
     ctx.registerPreset({
@@ -469,10 +469,10 @@ export const discordPlugin: OmniDeckPlugin = {
       name: "Voice Channel",
       description: "Join a voice channel",
       category: "Voice",
-      icon: "ms:headset-mic",
+      icon: "ms:spatial-audio",
       action: "join_voice",
       stateProvider: "voice_status",
-      defaults: { icon: "ms:headset-mic", label: "{{status}}" },
+      defaults: { icon: "ms:spatial-audio", label: "{{status}}" },
     });
 
     ctx.registerPreset({
@@ -523,10 +523,10 @@ export const discordPlugin: OmniDeckPlugin = {
       name: "PTT Mode",
       description: "Toggle Push to Talk mode",
       category: "Voice",
-      icon: "ms:record-voice-over",
+      icon: "ms:keyboard-voice",
       action: "toggle_ptt_mode",
       stateProvider: "voice_status",
-      defaults: { icon: "ms:record-voice-over", label: "PTT" },
+      defaults: { icon: "ms:keyboard-voice", label: "PTT" },
     });
 
     ctx.registerPreset({
@@ -534,10 +534,10 @@ export const discordPlugin: OmniDeckPlugin = {
       name: "User Mixer",
       description: "Open per-user volume controls for the current voice channel",
       category: "Voice",
-      icon: "ms:tune",
+      icon: "ms:manage-accounts",
       action: "open_user_mixer",
       stateProvider: "voice_status",
-      defaults: { icon: "ms:tune", label: "Mixer" },
+      defaults: { icon: "ms:manage-accounts", label: "Mixer" },
     });
 
     ctx.setHealth({ status: "ok" });
