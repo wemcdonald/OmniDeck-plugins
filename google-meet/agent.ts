@@ -175,7 +175,8 @@ export default function init(omnideck: OmniDeck) {
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
   omnideck.onReloadConfig(() => {
-    omnideck.log.warn("google-meet config changed — restart agent to apply");
+    // Hub reconnected — re-push current state to repopulate empty store
+    pushState();
   });
 
   omnideck.onDestroy(() => {

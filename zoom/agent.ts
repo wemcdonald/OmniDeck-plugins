@@ -318,7 +318,8 @@ export default function init(omnideck: OmniDeck) {
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
   omnideck.onReloadConfig(() => {
-    omnideck.log.warn("zoom config changed — restart agent to apply");
+    // Hub reconnected — re-push current state to repopulate empty store
+    omnideck.setState("meeting", state);
   });
 
   omnideck.onDestroy(() => {
