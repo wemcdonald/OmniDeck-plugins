@@ -51,7 +51,7 @@ export default function init(omnideck: OmniDeck) {
         state = await pollLinux();
       }
     } catch (err) {
-      omnideck.log.error("Zoom poll failed", { err: String(err) });
+      omnideck.log.debug("Zoom poll failed", { err: String(err) });
       state = { ...EMPTY_STATE };
     }
     omnideck.setState("meeting", state);
