@@ -571,10 +571,10 @@ export const discordPlugin: OmniDeckPlugin = {
       name: "User Mixer",
       description: "Open per-user volume controls for the current voice channel",
       category: "Voice",
-      icon: "ms:sliders",
+      icon: "ms:equalizer",
       action: "open_user_mixer",
       stateProvider: "voice_connection",
-      defaults: { icon: "ms:sliders", label: "Mixer" },
+      defaults: { icon: "ms:equalizer", label: "Mixer" },
     });
 
     ctx.setHealth({ status: "ok" });
