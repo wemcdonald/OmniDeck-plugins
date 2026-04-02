@@ -278,7 +278,7 @@ export const discordPlugin: OmniDeckPlugin = {
         }
         if (s.deafened) {
           return {
-            state: { icon: "ms:headphones-off", iconColor: "#ef4444", background: "#451a1a" },
+            state: { icon: "ms:hearing-disabled", iconColor: "#ef4444", background: "#451a1a" },
             variables: { deafen_state: "Deafened" },
           };
         }
