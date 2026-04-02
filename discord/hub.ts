@@ -221,6 +221,43 @@ export const discordPlugin: OmniDeckPlugin = {
       },
     });
 
+    // voice_connection — like voice_status but does NOT override the button icon.
+    // Used for buttons that have their own fixed icon (PTT, Leave, Mixer, Text).
+    ctx.registerStateProvider({
+      id: "voice_connection",
+      name: "Voice Connection",
+      description: "Dims button when not connected; provides channel name. Does not override icon.",
+      icon: "ms:spatial-audio",
+      providesIcon: false,
+      paramsSchema: targetOnlySchema,
+      templateVariables: [
+        { key: "channel", label: "Channel", example: "General" },
+        { key: "status", label: "Status", example: "In Voice" },
+      ],
+      resolve(params) {
+        const p = params as Record<string, unknown>;
+        const target = resolveTarget(p, { focusedAgent: undefined });
+        const s = getState(target);
+
+        if (!s?.connected) {
+          return {
+            state: { iconColor: "#4b5563" },
+            variables: { channel: "", status: "Disconnected" },
+          };
+        }
+        if (!s.voiceChannelId) {
+          return {
+            state: { iconColor: "#9ca3af" },
+            variables: { channel: "", status: "Not in voice" },
+          };
+        }
+        return {
+          state: { iconColor: "#ffffff" },
+          variables: { channel: s.voiceChannelName ?? "", status: s.voiceChannelName ?? "In Voice" },
+        };
+      },
+    });
+
     ctx.registerStateProvider({
       id: "mute_status",
       name: "Mute Status",
@@ -471,7 +508,7 @@ export const discordPlugin: OmniDeckPlugin = {
       category: "Voice",
       icon: "ms:spatial-audio",
       action: "join_voice",
-      stateProvider: "voice_status",
+      stateProvider: "voice_connection",
       defaults: { icon: "ms:spatial-audio", label: "{{status}}" },
     });
 
@@ -482,7 +519,7 @@ export const discordPlugin: OmniDeckPlugin = {
       category: "Voice",
       icon: "ms:call-end",
       action: "leave_voice",
-      stateProvider: "voice_status",
+      stateProvider: "voice_connection",
       defaults: { icon: "ms:call-end", label: "Leave", iconColor: "#ef4444" },
     });
 
@@ -525,7 +562,7 @@ export const discordPlugin: OmniDeckPlugin = {
       category: "Voice",
       icon: "ms:keyboard-voice",
       action: "toggle_ptt_mode",
-      stateProvider: "voice_status",
+      stateProvider: "voice_connection",
       defaults: { icon: "ms:keyboard-voice", label: "PTT" },
     });
 
@@ -536,7 +573,7 @@ export const discordPlugin: OmniDeckPlugin = {
       category: "Voice",
       icon: "ms:manage-accounts",
       action: "open_user_mixer",
-      stateProvider: "voice_status",
+      stateProvider: "voice_connection",
       defaults: { icon: "ms:manage-accounts", label: "Mixer" },
     });
 
