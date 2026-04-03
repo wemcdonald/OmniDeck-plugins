@@ -1,4 +1,4 @@
-// plugins/spotify/agent.ts
+// plugins/spotify/agent.ts  (v2 — with 204 track preservation)
 // Agent-side plugin: authenticates with Spotify via PKCE, polls playback
 // state, downloads album art, and handles playback control actions.
 //
@@ -36,6 +36,7 @@ const SPOTIFY_ACCOUNTS = "https://accounts.spotify.com";
 const SPOTIFY_API = "https://api.spotify.com/v1";
 const SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing";
 const CALLBACK_PORT = 28120;
+const AGENT_CODE_VERSION = 2; // bump to verify agent re-downloads on SHA change
 
 const EMPTY_PLAYBACK: PlaybackState = {
   status: "idle",
@@ -356,6 +357,7 @@ export default function init(omnideck: OmniDeck) {
         lastState = { ...EMPTY_PLAYBACK, updated_at: Date.now() };
       }
       pushState();
+      omnideck.setActive(false);
       return;
     }
 
@@ -407,6 +409,7 @@ export default function init(omnideck: OmniDeck) {
       updated_at: Date.now(),
     };
     pushState();
+    omnideck.setActive(lastState.is_playing);
 
     // Download album art only when track changes
     const trackId = item?.id as string | undefined;
@@ -552,6 +555,8 @@ export default function init(omnideck: OmniDeck) {
       pushState();
     }
   }
+
+  omnideck.log.info(`Spotify agent init (code v${AGENT_CODE_VERSION})`);
 
   if (clientId) {
     startup();
