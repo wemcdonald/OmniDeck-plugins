@@ -19,6 +19,7 @@ const configSchema = z.object({
     label: "Spotify Client ID",
     description: "Create an app at developer.spotify.com/dashboard and copy the Client ID",
     placeholder: "e.g. a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+    secret: true,
   }),
   poll_interval: field(z.number().min(1000).max(30000).default(3000), {
     label: "Poll Interval (ms)",

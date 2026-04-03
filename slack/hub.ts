@@ -418,7 +418,7 @@ const dndViewParams = z.object({ ...workspaceParam });
 // ── Config Schema ─────────────────────────────────────────────────────────
 
 const slackConfigSchema = z.object({
-  token: field(z.string().optional(), { label: "User Token", placeholder: "xoxp-..." }),
+  token: field(z.string().optional(), { label: "User Token", placeholder: "xoxp-...", secret: true }),
   poll_interval: field(z.string().default("60s").optional(), { label: "Poll Interval", placeholder: "60s" }),
 });
 

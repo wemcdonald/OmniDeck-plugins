@@ -41,7 +41,7 @@ const dndDurationParams = z.object({
 
 const discordConfigSchema = z.object({
   client_id: field(z.string().optional(), { label: "Client ID" }),
-  client_secret: field(z.string().optional(), { label: "Client Secret" }),
+  client_secret: field(z.string().optional(), { label: "Client Secret", secret: true }),
 });
 
 export const discordPlugin: OmniDeckPlugin = {
