@@ -40,8 +40,8 @@ const dndDurationParams = z.object({
 });
 
 const discordConfigSchema = z.object({
-  client_id: field(z.string().optional(), { label: "Client ID" }),
-  client_secret: field(z.string().optional(), { label: "Client Secret", secret: true }),
+  client_id: field(z.string().min(1), { label: "Client ID" }),
+  client_secret: field(z.string().min(1), { label: "Client Secret", secret: true }),
 });
 
 export const discordPlugin: OmniDeckPlugin = {
@@ -52,6 +52,16 @@ export const discordPlugin: OmniDeckPlugin = {
   configSchema: discordConfigSchema,
 
   async init(ctx: PluginContext) {
+    // ── Required-config guard ──────────────────────────────────────────────
+    const cfgResult = discordConfigSchema.safeParse(ctx.config ?? {});
+    if (!cfgResult.success) {
+      ctx.setHealth({
+        status: "misconfigured",
+        message: "client_id and client_secret are required. Configure them in the plugin settings.",
+      });
+      return;
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     function resolveTarget(params: Record<string, unknown>, actionCtx: { focusedAgent?: string }) {
@@ -396,7 +406,7 @@ export const discordPlugin: OmniDeckPlugin = {
       resolve(params) {
         const p = params as { user_id?: string };
         const userId = p.user_id ?? (ctx.state.get("discord", "selected_user") as string);
-        const target = activeAgent;
+        const target = ctx.state.get("discord", "active_agent") as string | undefined;
         const s = target ? getState(target) : undefined;
         const user = s?.voiceUsers.find((u) => u.id === userId);
 
@@ -421,7 +431,7 @@ export const discordPlugin: OmniDeckPlugin = {
 
     // Voice Users page — lists all users in current voice channel
     ctx.registerPageProvider("voice_users", () => {
-      const target = activeAgent;
+      const target = ctx.state.get("discord", "active_agent") as string | undefined;
       const s = target ? getState(target) : undefined;
       const users = s?.voiceUsers ?? [];
 
@@ -446,7 +456,7 @@ export const discordPlugin: OmniDeckPlugin = {
     // User Volume page — mic/vol controls for selected user
     ctx.registerPageProvider("user_volume", () => {
       const userId = ctx.state.get("discord", "selected_user") as string;
-      const target = activeAgent;
+      const target = ctx.state.get("discord", "active_agent") as string | undefined;
       const s = target ? getState(target) : undefined;
       const user = s?.voiceUsers.find((u) => u.id === userId);
       const username = user?.username ?? "User";

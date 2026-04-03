@@ -80,7 +80,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
   let ipcReadBuf = Buffer.alloc(0);
 
   // Pending command callbacks
-  const pending = new Map<string, { resolve: (data: any) => void; reject: (err: Error) => void }>();
+  const pending = new Map<string, { resolve: (data: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 
   function pushState() {
     omnideck.setState("discord", state);
@@ -134,14 +134,14 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
       const nonce = nextNonce();
       const msg: Record<string, unknown> = { cmd, nonce, args };
       if (evt) msg.evt = evt;
-      pending.set(nonce, { resolve, reject });
-      ipcSendRaw(1, JSON.stringify(msg)); // opcode 1 = FRAME
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (pending.has(nonce)) {
           pending.delete(nonce);
           reject(new Error(`RPC timeout: ${cmd}`));
         }
       }, 10000);
+      pending.set(nonce, { resolve, reject, timer });
+      ipcSendRaw(1, JSON.stringify(msg)); // opcode 1 = FRAME
     });
   }
 
@@ -378,6 +378,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
     // Handle command responses
     if (msg.nonce && pending.has(msg.nonce)) {
       const p = pending.get(msg.nonce)!;
+      clearTimeout(p.timer);
       pending.delete(msg.nonce);
       if (msg.evt === "ERROR") {
         p.reject(new Error(msg.data?.message ?? "RPC error"));
@@ -603,6 +604,9 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
 
   omnideck.onDestroy(() => {
     if (reconnectTimer) clearTimeout(reconnectTimer);
+    // Cancel all pending RPC timeouts so they don't fire after unload
+    for (const p of pending.values()) clearTimeout(p.timer);
+    pending.clear();
     ipc?.destroy();
     ipc = null;
   });

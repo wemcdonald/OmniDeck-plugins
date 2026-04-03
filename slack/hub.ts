@@ -435,6 +435,10 @@ function parseDuration(s: string): number {
   return 60000;
 }
 
+// Module-level handles so destroy() can clear them regardless of init() scope
+let _slackPollTimer: ReturnType<typeof setInterval> | null = null;
+let _slackUserTimer: ReturnType<typeof setInterval> | null = null;
+
 export const slackPlugin: OmniDeckPlugin = {
   id: "slack",
   name: "Slack",
@@ -481,7 +485,7 @@ export const slackPlugin: OmniDeckPlugin = {
 
     // ── Polling ─────────────────────────────────────────────────────────
 
-    setInterval(async () => {
+    _slackPollTimer = setInterval(async () => {
       for (const ws of workspaces.values()) {
         if (!ws.ready) continue;
         await ws.refreshConversations();
@@ -491,7 +495,7 @@ export const slackPlugin: OmniDeckPlugin = {
     }, pollInterval);
 
     // Refresh users less frequently
-    setInterval(async () => {
+    _slackUserTimer = setInterval(async () => {
       for (const ws of workspaces.values()) {
         if (!ws.ready) continue;
         await ws.refreshUsers();
@@ -841,5 +845,8 @@ export const slackPlugin: OmniDeckPlugin = {
     ctx.setHealth({ status: "ok" });
   },
 
-  async destroy() {},
+  async destroy() {
+    if (_slackPollTimer) { clearInterval(_slackPollTimer); _slackPollTimer = null; }
+    if (_slackUserTimer) { clearInterval(_slackUserTimer); _slackUserTimer = null; }
+  },
 };
