@@ -6,3 +6,10 @@ description: |
   volume control, album art display, and scrolling track info.
 hub: hub.ts
 agent: agent.ts
+icon: ms:queue-music
+category: Media
+setup_steps:
+  - "Create an app at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)"
+  - "Set the Redirect URI to `http://localhost:28120/callback`"
+  - "Paste your Client ID in the field below"
+source_url: "https://github.com/wemcdonald/OmniDeck-plugins"

@@ -5,3 +5,6 @@ description: |
   Display the current time on your deck. Supports analog clock face
   and digital display modes with customizable colors and time zones.
 hub: hub.ts
+icon: ms:schedule
+category: Utility
+source_url: "https://github.com/wemcdonald/OmniDeck-plugins"

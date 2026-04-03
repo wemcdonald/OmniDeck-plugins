@@ -7,3 +7,10 @@ description: |
   workspaces. Requires a Slack user token (xoxp-).
 hub: hub.ts
 agent: agent.ts
+icon: ms:tag
+category: Communication
+setup_steps:
+  - "Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps)"
+  - "Under OAuth & Permissions, add the required scopes and install to your workspace"
+  - "Copy the User OAuth Token (starts with `xoxp-`) into the field below"
+source_url: "https://github.com/wemcdonald/OmniDeck-plugins"

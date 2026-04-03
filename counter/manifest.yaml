@@ -5,3 +5,6 @@ description: |
   Simple counter that increments on each press and resets on long press.
   Customizable number color, size, and font.
 hub: hub.ts
+icon: ms:pin
+category: Utility
+source_url: "https://github.com/wemcdonald/OmniDeck-plugins"

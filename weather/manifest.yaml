@@ -6,3 +6,6 @@ description: |
   Powered by Open-Meteo — no API key required.
   Supports city names, postal codes, or GPS coordinates.
 hub: hub.ts
+icon: ms:partly-cloudy-day
+category: Utility
+source_url: "https://github.com/wemcdonald/OmniDeck-plugins"

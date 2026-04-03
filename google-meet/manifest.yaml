@@ -14,3 +14,10 @@ downloads:
     label: "Chrome Extension"
     path: extension/
     description: "Load as unpacked extension in Chrome (chrome://extensions → Load unpacked)"
+icon: ms:videocam
+category: Communication
+setup_steps:
+  - "Download and install the companion Chrome extension using the button below"
+  - "In Chrome, go to `chrome://extensions`, enable Developer Mode, click Load unpacked, and select the downloaded extension folder"
+  - "Join a Google Meet call — OmniDeck will detect it automatically"
+source_url: "https://github.com/wemcdonald/OmniDeck-plugins"

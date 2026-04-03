@@ -7,3 +7,10 @@ description: |
   and text channel shortcuts. Uses Discord's local RPC API.
 hub: hub.ts
 agent: agent.ts
+icon: ms:forum
+category: Communication
+setup_steps:
+  - "Create an app at [discord.com/developers/applications](https://discord.com/developers/applications)"
+  - "Under OAuth2, add `http://localhost:28120/callback` as a Redirect URI"
+  - "Copy your Client ID and Client Secret into the fields below"
+source_url: "https://github.com/wemcdonald/OmniDeck-plugins"

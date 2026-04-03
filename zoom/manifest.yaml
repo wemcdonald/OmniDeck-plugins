@@ -11,3 +11,8 @@ description: |
   Supported platforms: macOS, Windows, Linux.
 hub: hub.ts
 agent: agent.ts
+icon: ms:video-call
+category: Communication
+setup_steps:
+  - "In Zoom Settings > Keyboard Shortcuts, enable Global Shortcuts for the shortcuts you want OmniDeck to control"
+source_url: "https://github.com/wemcdonald/OmniDeck-plugins"
