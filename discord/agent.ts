@@ -339,7 +339,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
         continue;
       }
     }
-    omnideck.log.debug("Could not connect to Discord RPC on any socket path");
+    omnideck.log.warn("Could not connect to Discord RPC on any socket path", { paths: paths.slice(0, 2) });
     state = { ...EMPTY_STATE };
     pushState();
     scheduleReconnect();
@@ -400,7 +400,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
 
   function tryConnectIpc(socketPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const socket = net.createConnection(socketPath);
+      const socket = net.createConnection({ path: socketPath });
       const timeout = setTimeout(() => {
         socket.destroy();
         reject(new Error("timeout"));
