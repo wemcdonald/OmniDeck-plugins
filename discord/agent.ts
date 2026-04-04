@@ -358,6 +358,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
           subscribe("VOICE_CHANNEL_SELECT");
           subscribe("VOICE_CONNECTION_STATUS");
           omnideck.log.info("Subscribed to Discord events, syncing state...");
+          omnideck.setActive(true);
           syncVoiceSettings()
             .then(() => syncVoiceChannel())
             .then(() => {
@@ -436,6 +437,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
           ipc = null;
           state.connected = false;
           state.authenticated = false;
+          omnideck.setActive(false);
           omnideck.log.info("Discord IPC disconnected");
           pushState();
           scheduleReconnect();
