@@ -19,6 +19,7 @@ interface DiscordState {
   voiceMode: string; // "VOICE_ACTIVITY" | "PUSH_TO_TALK"
   voiceUsers: Array<{ id: string; username: string; volume: number; mute: boolean }>;
   username: string;
+  pttActive: boolean; // true while push-to-talk button is held
 }
 
 const EMPTY_STATE: DiscordState = {
@@ -32,6 +33,7 @@ const EMPTY_STATE: DiscordState = {
   voiceMode: "VOICE_ACTIVITY",
   voiceUsers: [],
   username: "",
+  pttActive: false,
 };
 
 export default function init(omnideck: OmniDeck) {
@@ -536,6 +538,37 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
     pushState();
     try {
       await send("SET_VOICE_SETTINGS", { mode: { type: newMode } });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  // Hold-to-talk: unmute while the button is held, mute on release.
+  // Works regardless of whether Push to Talk mode is enabled in Discord.
+  omnideck.onAction("ptt_start", async () => {
+    if (!state.authenticated) return { success: false, error: "Not connected" };
+    state.pttActive = true;
+    state.muted = false;
+    pushState();
+    try {
+      await send("SET_VOICE_SETTINGS", { mute: false });
+      return { success: true };
+    } catch (err) {
+      state.pttActive = false;
+      state.muted = true;
+      pushState();
+      return { success: false, error: String(err) };
+    }
+  });
+
+  omnideck.onAction("ptt_stop", async () => {
+    if (!state.authenticated) return { success: false, error: "Not connected" };
+    state.pttActive = false;
+    state.muted = true;
+    pushState();
+    try {
+      await send("SET_VOICE_SETTINGS", { mute: true });
       return { success: true };
     } catch (err) {
       return { success: false, error: String(err) };

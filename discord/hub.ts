@@ -15,6 +15,7 @@ interface DiscordState {
   voiceMode: string;
   voiceUsers: Array<{ id: string; username: string; volume: number; mute: boolean }>;
   username: string;
+  pttActive: boolean;
 }
 
 const targetParam = {
@@ -112,6 +113,8 @@ export const discordPlugin: OmniDeckPlugin = {
     registerAgentAction("toggle_stream", "Toggle Stream", "Start or stop screenshare", "ms:screen-share");
     registerAgentAction("toggle_ptt_mode", "Toggle PTT Mode", "Switch between Voice Activity and Push to Talk", "ms:keyboard-voice");
     registerAgentAction("leave_voice", "Leave Voice", "Leave the current voice channel", "ms:call-end");
+    registerAgentAction("ptt_start", "PTT Start", "Unmute microphone (hold-to-talk press)", "ms:mic");
+    registerAgentAction("ptt_stop", "PTT Stop", "Mute microphone (hold-to-talk release)", "ms:mic-off");
 
     ctx.registerAction({
       id: "join_voice",
@@ -184,6 +187,26 @@ export const discordPlugin: OmniDeckPlugin = {
         const target = resolveTarget(p, actionCtx);
         ctx.state.set("discord", `pending:${target}:adjust_user`, {
           params: { user_id: p.user_id, delta: p.delta },
+          timestamp: Date.now(),
+        });
+      },
+    });
+
+    ctx.registerAction({
+      id: "mute_user",
+      name: "Mute User",
+      description: "Toggle local mute for a specific user",
+      icon: "ms:person",
+      paramsSchema: z.object({
+        ...targetParam,
+        user_id: z.string(),
+        mute: z.boolean(),
+      }),
+      async execute(params, actionCtx) {
+        const p = params as Record<string, unknown>;
+        const target = resolveTarget(p, actionCtx);
+        ctx.state.set("discord", `pending:${target}:mute_user`, {
+          params: { user_id: p.user_id, mute: p.mute },
           timestamp: Date.now(),
         });
       },
@@ -392,6 +415,40 @@ export const discordPlugin: OmniDeckPlugin = {
       },
     });
 
+    ctx.registerStateProvider({
+      id: "ptt_status",
+      name: "PTT Status",
+      description: "Push-to-talk active/muted state — green when live, red when muted",
+      icon: "ms:mic",
+      providesIcon: true,
+      paramsSchema: targetOnlySchema,
+      templateVariables: [
+        { key: "ptt_state", label: "PTT State", example: "Live" },
+      ],
+      resolve(params) {
+        const p = params as Record<string, unknown>;
+        const target = resolveTarget(p, { focusedAgent: undefined });
+        const s = getState(target);
+
+        if (!s?.connected || !s.voiceChannelId) {
+          return {
+            state: { icon: "ms:mic-off", iconColor: "#4b5563" },
+            variables: { ptt_state: "" },
+          };
+        }
+        if (!s.muted) {
+          return {
+            state: { icon: "ms:mic", iconColor: "#22c55e", background: "#052e16" },
+            variables: { ptt_state: "Live" },
+          };
+        }
+        return {
+          state: { icon: "ms:mic-off", iconColor: "#ef4444", background: "#451a1a" },
+          variables: { ptt_state: "Muted" },
+        };
+      },
+    });
+
     // State provider for user volume level (used by dynamic volume page)
     ctx.registerStateProvider({
       id: "user_volume",
@@ -439,7 +496,10 @@ export const discordPlugin: OmniDeckPlugin = {
         pos: [i % 5, Math.floor(i / 5)],
         action: "discord.select_user_volume",
         params: { user_id: user.id },
+        long_press_action: "discord.mute_user",
+        long_press_params: { user_id: user.id, mute: !user.mute },
         icon: "ms:person",
+        icon_color: user.mute ? "#ef4444" : "#22c55e",
         label: user.username.length > 10 ? user.username.slice(0, 9) + "…" : user.username,
       }));
 
@@ -461,27 +521,34 @@ export const discordPlugin: OmniDeckPlugin = {
       const user = s?.voiceUsers.find((u) => u.id === userId);
       const username = user?.username ?? "User";
       const vol = user?.volume ?? 100;
+      const isMuted = user?.mute ?? false;
 
       const buttons: Array<Record<string, unknown>> = [
-        // Center label: user name
-        { pos: [2, 0], icon: "ms:person", label: username },
+        // Volume % above user name
+        { pos: [2, 0], icon: "ms:volume-up", label: `${Math.round(vol)}%` },
 
-        // Volume up
-        { pos: [1, 0], action: "discord.adjust_user", params: { user_id: userId, delta: 20 }, icon: "ms:add-circle", label: "" },
-        // Volume display
-        { pos: [1, 1], icon: "ms:volume-up", label: `${Math.round(vol)}%` },
-        // Volume down
-        { pos: [1, 2], action: "discord.adjust_user", params: { user_id: userId, delta: -20 }, icon: "ms:remove-circle", label: "" },
+        // User name / mute toggle — red if muted, green if unmuted
+        {
+          pos: [2, 1],
+          action: "discord.mute_user",
+          params: { user_id: userId, mute: !isMuted },
+          icon: "ms:person",
+          icon_color: isMuted ? "#ef4444" : "#22c55e",
+          label: username,
+        },
 
-        // Volume up (fine)
-        { pos: [3, 0], action: "discord.adjust_user", params: { user_id: userId, delta: 5 }, icon: "ms:add", label: "" },
-        // Fine label
-        { pos: [3, 1], icon: "ms:tune", label: "Fine" },
-        // Volume down (fine)
-        { pos: [3, 2], action: "discord.adjust_user", params: { user_id: userId, delta: -5 }, icon: "ms:remove", label: "" },
+        // Fine controls (col 1)
+        { pos: [1, 0], action: "discord.adjust_user", params: { user_id: userId, delta: 5 }, icon: "ms:add", label: "" },
+        { pos: [1, 1], icon: "ms:tune", label: "Fine" },
+        { pos: [1, 2], action: "discord.adjust_user", params: { user_id: userId, delta: -5 }, icon: "ms:remove", label: "" },
+
+        // Coarse controls (col 3)
+        { pos: [3, 0], action: "discord.adjust_user", params: { user_id: userId, delta: 20 }, icon: "ms:add", label: "" },
+        { pos: [3, 1], icon: "ms:tune", label: "Coarse" },
+        { pos: [3, 2], action: "discord.adjust_user", params: { user_id: userId, delta: -20 }, icon: "ms:remove", label: "" },
 
         // Back
-        { pos: [0, 2], action: "omnideck-core.go_back", icon: "ms:arrow-back", label: "Back" },
+        { pos: [4, 2], action: "omnideck-core.go_back", icon: "ms:arrow-back", label: "Back" },
       ];
 
       return { page: "discord.user_volume", name: `${username} Volume`, buttons };
@@ -574,6 +641,18 @@ export const discordPlugin: OmniDeckPlugin = {
       action: "toggle_ptt_mode",
       stateProvider: "voice_connection",
       defaults: { icon: "ms:keyboard-voice", label: "PTT" },
+    });
+
+    ctx.registerPreset({
+      id: "ptt",
+      name: "Push to Talk",
+      description: "Hold to unmute, release to mute. Works with or without PTT mode enabled.",
+      category: "Voice",
+      icon: "ms:mic",
+      pressAction: "ptt_start",
+      releaseAction: "ptt_stop",
+      stateProvider: "ptt_status",
+      defaults: { icon: "ms:mic", label: "PTT" },
     });
 
     ctx.registerPreset({
