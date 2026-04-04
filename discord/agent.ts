@@ -311,6 +311,12 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
 
   function getIpcPaths(): string[] {
     const paths: string[] = [];
+    if (omnideck.platform === "windows") {
+      for (let i = 0; i <= 9; i++) {
+        paths.push(`\\\\?\\pipe\\discord-ipc-${i}`);
+      }
+      return paths;
+    }
     const base = process.env.TMPDIR ?? process.env.TMP ?? process.env.TEMP ?? "/tmp";
     const xdgRuntime = process.env.XDG_RUNTIME_DIR;
     for (let i = 0; i <= 9; i++) {
