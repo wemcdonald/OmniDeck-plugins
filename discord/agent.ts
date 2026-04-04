@@ -313,6 +313,8 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
     const paths: string[] = [];
     if (omnideck.platform === "windows") {
       for (let i = 0; i <= 9; i++) {
+        // Both pipe path formats — \\.\pipe\ (device namespace) and \\?\pipe\ (extended)
+        paths.push(`\\\\.\\pipe\\discord-ipc-${i}`);
         paths.push(`\\\\?\\pipe\\discord-ipc-${i}`);
       }
       return paths;
