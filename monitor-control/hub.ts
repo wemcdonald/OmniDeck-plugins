@@ -186,7 +186,6 @@ export const monitorControlPlugin: OmniDeckPlugin = {
       defaults: {
         icon: "ms:monitor",
         label: "{{input_name}}",
-        background: "#1e293b",
       },
     });
 
