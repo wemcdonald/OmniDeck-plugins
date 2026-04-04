@@ -65,16 +65,30 @@ export const discordPlugin: OmniDeckPlugin = {
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    function resolveTarget(params: Record<string, unknown>, actionCtx: { focusedAgent?: string }) {
-      // Prefer explicit target > focused agent > last active agent from state store
-      return (params.target as string | undefined)
-        ?? actionCtx.focusedAgent
-        ?? (ctx.state.get("discord", "active_agent") as string | undefined);
-    }
-
     function getState(target: string | undefined): DiscordState | undefined {
       if (!target) return undefined;
       return ctx.state.get("discord", `agent:${target}:discord`) as DiscordState | undefined;
+    }
+
+    /** Return the hostname of the first agent that is currently in a voice channel. */
+    function getActiveVoiceAgent(): string | undefined {
+      for (const [key, value] of ctx.state.getAll("discord").entries()) {
+        if (key.startsWith("agent:") && key.endsWith(":discord")) {
+          const s = value as DiscordState | undefined;
+          if (s?.voiceChannelId) {
+            return key.slice("agent:".length, key.length - ":discord".length);
+          }
+        }
+      }
+      return undefined;
+    }
+
+    function resolveTarget(params: Record<string, unknown>, actionCtx: { focusedAgent?: string }) {
+      // Prefer explicit target > focused agent > agent in a voice channel > last active agent
+      return (params.target as string | undefined)
+        ?? actionCtx.focusedAgent
+        ?? getActiveVoiceAgent()
+        ?? (ctx.state.get("discord", "active_agent") as string | undefined);
     }
 
     function registerAgentAction(
