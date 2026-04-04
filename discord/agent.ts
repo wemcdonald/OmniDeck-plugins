@@ -45,7 +45,7 @@ export default function init(omnideck: OmniDeck) {
 
   // If config not available at init, wait for reload (config is sent after plugin loads)
   if (!clientId || !clientSecret) {
-    omnideck.log.warn("Discord plugin: waiting for config reload with client_id and client_secret");
+    omnideck.log.info("Discord plugin: waiting for config reload with client_id and client_secret");
     omnideck.setState("discord", { ...EMPTY_STATE });
     omnideck.onReloadConfig((newConfig) => {
       const newId = newConfig.client_id as string;
@@ -329,7 +329,7 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
         continue;
       }
     }
-    omnideck.log.warn("Could not connect to Discord RPC on any socket path");
+    omnideck.log.debug("Could not connect to Discord RPC on any socket path");
     state = { ...EMPTY_STATE };
     pushState();
     scheduleReconnect();

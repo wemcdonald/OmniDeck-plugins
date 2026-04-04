@@ -561,7 +561,7 @@ export default function init(omnideck: OmniDeck) {
   if (clientId) {
     startup();
   } else {
-    omnideck.log.warn("Spotify plugin: waiting for config with client_id");
+    omnideck.log.info("Spotify plugin: waiting for config with client_id");
     lastState = { ...EMPTY_PLAYBACK, status: "error", error_message: "No Client ID" };
     pushState();
   }
