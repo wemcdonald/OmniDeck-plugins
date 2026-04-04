@@ -55,6 +55,7 @@ export default function init(omnideck: OmniDeck) {
       state = { ...EMPTY_STATE };
     }
     omnideck.setState("meeting", state);
+    omnideck.setActive(state.inMeeting);
   }
 
   const handle = omnideck.setInterval(poll, pollInterval);

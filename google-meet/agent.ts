@@ -51,6 +51,7 @@ export default function init(omnideck: OmniDeck) {
 
   function pushState() {
     omnideck.setState("meeting", state);
+    omnideck.setActive(state.inCall);
   }
 
   // ── WebSocket server via Bun.serve() ────────────────────────────────────
