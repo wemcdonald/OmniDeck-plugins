@@ -266,6 +266,7 @@ export const discordPlugin: OmniDeckPlugin = {
       templateVariables: [
         { key: "channel", label: "Channel", example: "General" },
         { key: "status", label: "Status", example: "In Voice" },
+        { key: "in_voice", label: "In Voice", example: "true" },
       ],
       resolve(params) {
         const p = params as Record<string, unknown>;
@@ -275,18 +276,18 @@ export const discordPlugin: OmniDeckPlugin = {
         if (!s?.connected) {
           return {
             state: { iconColor: "#4b5563" },
-            variables: { channel: "", status: "Disconnected" },
+            variables: { channel: "", status: "Disconnected", in_voice: "false" },
           };
         }
         if (!s.voiceChannelId) {
           return {
             state: { iconColor: "#9ca3af" },
-            variables: { channel: "", status: "Not in voice" },
+            variables: { channel: "", status: "Not in voice", in_voice: "false" },
           };
         }
         return {
           state: { iconColor: "#ffffff" },
-          variables: { channel: s.voiceChannelName ?? "", status: s.voiceChannelName ?? "In Voice" },
+          variables: { channel: s.voiceChannelName ?? "", status: s.voiceChannelName ?? "In Voice", in_voice: "true" },
         };
       },
     });
