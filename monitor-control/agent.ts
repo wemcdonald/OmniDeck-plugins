@@ -195,6 +195,9 @@ public class DDC {
     omnideck.exec("which", ["m1ddc"]).then((r) => {
       if (r.exitCode !== 0) {
         omnideck.log.warn("m1ddc not found. Install with: brew install m1ddc");
+        omnideck.setHealth({ status: "misconfigured", message: "m1ddc not found — install with: brew install m1ddc" });
+      } else {
+        omnideck.setHealth({ status: "ok" });
       }
     });
   } else if (platform === "linux") {
@@ -203,8 +206,13 @@ public class DDC {
         omnideck.log.warn(
           "ddcutil not found. Install with: sudo apt install ddcutil i2c-tools && sudo usermod -aG i2c $USER && sudo modprobe i2c-dev",
         );
+        omnideck.setHealth({ status: "misconfigured", message: "ddcutil not found — install with: sudo apt install ddcutil i2c-tools" });
+      } else {
+        omnideck.setHealth({ status: "ok" });
       }
     });
+  } else {
+    omnideck.setHealth({ status: "ok" });
   }
 
   // --- Poll and report monitor state ---

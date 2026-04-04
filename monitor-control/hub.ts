@@ -144,6 +144,18 @@ export const monitorControlPlugin: OmniDeckPlugin = {
       resolve(params) {
         const p = params as Record<string, unknown>;
         const target = (p.target as string | undefined) ?? config.default_target;
+
+        // Surface agent health issues on the button
+        const agentHealth = ctx.state.get("monitor-control", `agent:${target}:_health`) as
+          | { status: string; message?: string }
+          | undefined;
+        if (agentHealth && agentHealth.status !== "ok") {
+          return {
+            state: { icon: "ms:error", label: agentHealth.message ?? "Plugin error", icon_color: "#ef4444" },
+            variables: { input_name: "Error", input_value: "", monitor_name: "" },
+          };
+        }
+
         const monitors = getMonitors(target);
         const monitorParam = p.monitor as string | undefined;
         const configInputs = p.inputs as Record<string, Record<string, string>> | undefined;
