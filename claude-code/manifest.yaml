@@ -1,0 +1,19 @@
+id: claude-code
+name: "Claude Code"
+version: "0.1.0"
+description: |
+  Surface live Claude Code CLI sessions as buttons on your deck. Each session shows
+  its current state — working, asking a question, idle, or just finished — with
+  color-coded icons. Press a button to focus the session's tmux/iTerm tab.
+
+  Optional LLM-backed status analysis (Anthropic or OpenAI) distinguishes
+  "Claude is asking you something" from "Claude is idle at the prompt".
+hub: hub.ts
+agent: agent.ts
+icon: ms:terminal
+category: Developer
+setup_steps:
+  - "Drop the **Claude Code Sessions** page onto a button to auto-populate session tiles."
+  - "Or add the **Claude Code Session** preset manually and pick a session to pin."
+  - "(Optional) Enable **Status analysis** in plugin settings to tell apart questions from idle replies."
+source_url: "https://github.com/wemcdonald/OmniDeck-plugins"
