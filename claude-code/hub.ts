@@ -163,7 +163,15 @@ const recentSessionSchema = z.object({
     {
       label: "Display style",
       description:
-        "scroll: Claude icon + project name scrolling at the bottom. body: large wrapped project name fills the tile, small Claude mark in the corner.",
+        "scroll: Claude icon + project name scrolling at the bottom. body: large wrapped project name fills the tile.",
+    },
+  ),
+  body_icon: field(
+    z.enum(["corner", "background"]).default("corner"),
+    {
+      label: "Body icon placement",
+      description:
+        "Only applies when display_style=body. corner: small Claude mark top-left. background: faded full-size Claude mark behind the text.",
     },
   ),
 });
@@ -207,15 +215,36 @@ export const claudeCodePlugin: OmniDeckPlugin = {
     // The hub renderer accepts Buffers for both `icon` and `cornerIcon`, so
     // we can pre-rasterize once and reuse the same buffers for both slots.
     const claudeIcons = new Map<string, Buffer>();
+    const claudeBackgrounds = new Map<string, Buffer>();
     try {
       for (const color of [ORANGE, BLUE, GREEN, DIM, WHITE]) {
         claudeIcons.set(color, await renderClaudeIcon(color, 144));
+        // Experiment: big-icon-as-background — faded 70% Claude mark on dark.
+        const bigIcon = await sharp(
+          Buffer.from(CLAUDE_SVG.replace("<path ", `<path fill="${color}" `)),
+          { density: 400 },
+        )
+          .resize(100, 100, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+          .ensureAlpha()
+          .linear([1, 1, 1, 0.35], [0, 0, 0, 0])
+          .png()
+          .toBuffer();
+        const bg = await sharp({
+          create: { width: 144, height: 144, channels: 3, background: { r: 0x0f, g: 0x17, b: 0x2a } },
+        })
+          .composite([{ input: bigIcon, gravity: "centre" }])
+          .jpeg()
+          .toBuffer();
+        claudeBackgrounds.set(color, bg);
       }
     } catch (err) {
       ctx.log.warn({ err: String(err) }, "Failed to pre-render Claude icons; falling back to ms:terminal");
     }
     function claudeIconFor(color: string): Buffer | string {
       return claudeIcons.get(color) ?? "ms:terminal";
+    }
+    function claudeBgFor(color: string): Buffer | undefined {
+      return claudeBackgrounds.get(color);
     }
 
     // ── Helpers to read agent state ───────────────────────────────────────
@@ -403,6 +432,7 @@ export const claudeCodePlugin: OmniDeckPlugin = {
           (ctx.state.get("claude-code", "active_agent") as string | undefined);
         const session = getRecentSession(target, p.index as number);
         const displayStyle = (p.display_style as string | undefined) ?? "scroll";
+        const bodyIcon = (p.body_icon as string | undefined) ?? "corner";
 
         if (!session) {
           const empty = displayStyle === "body"
@@ -430,13 +460,20 @@ export const claudeCodePlugin: OmniDeckPlugin = {
         const { opacity: _opacity, ...visuals } = stateVisuals(effectiveState);
         const project = session.cwd.split("/").pop() ?? "";
         const tile = displayStyle === "body"
-          ? {
-              ...visuals,
-              bodyLabel: project,
-              cornerIcon: claudeIconFor(visuals.iconColor),
-              // Suppress the preset-default label; the name is baked into the tile.
-              label: "",
-            }
+          ? bodyIcon === "background"
+            ? {
+                ...visuals,
+                background: claudeBgFor(visuals.iconColor),
+                bodyLabel: project,
+                // Suppress the preset-default label; name is baked into the tile.
+                label: "",
+              }
+            : {
+                ...visuals,
+                bodyLabel: project,
+                cornerIcon: claudeIconFor(visuals.iconColor),
+                label: "",
+              }
           : {
               ...visuals,
               icon: claudeIconFor(visuals.iconColor),
