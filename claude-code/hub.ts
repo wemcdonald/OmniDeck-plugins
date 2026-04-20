@@ -196,7 +196,7 @@ function stateVisuals(state: SessionState): {
     case "ASKING":
       return { iconColor: BLUE, badge: "?", badgeColor: BLUE };
     case "DONE":
-      return { iconColor: GREEN };
+      return { iconColor: GREEN, badge: "✓", badgeColor: GREEN };
     case "STALE":
       return { iconColor: DIM, opacity: 0.4 };
   }
