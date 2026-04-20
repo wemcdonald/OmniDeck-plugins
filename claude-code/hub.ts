@@ -351,6 +351,37 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       },
     });
 
+    // ── Action: dismiss_recent ────────────────────────────────────────────
+    // Long-press a recent-session tile to acknowledge its ASKING/DONE signal.
+    // Stores the session's lastActivityMs as an "ack"; while the session has
+    // no newer activity, the tile renders as STALE (dim). Any new activity
+    // from the session invalidates the ack and the live state comes back.
+    ctx.registerAction({
+      id: "dismiss_recent",
+      name: "Dismiss recent session",
+      description: "Acknowledge this tile's status. It will look STALE until the session does something new.",
+      icon: "ms:check",
+      paramsSchema: recentSessionSchema,
+      async execute(params, actionCtx) {
+        const p = params as Record<string, unknown>;
+        const target = resolveTarget(p, actionCtx);
+        const session = getRecentSession(target, p.index as number);
+        if (!session) return;
+        ctx.state.set(
+          "claude-code",
+          `ack:${session.sessionId}`,
+          session.lastActivityMs,
+        );
+      },
+    });
+
+    function isAcknowledged(session: Session): boolean {
+      const ack = ctx.state.get("claude-code", `ack:${session.sessionId}`) as
+        | number
+        | undefined;
+      return typeof ack === "number" && ack >= session.lastActivityMs;
+    }
+
     // ── State provider: recent session by index ───────────────────────────
     ctx.registerStateProvider({
       id: "recent_session",
@@ -390,7 +421,13 @@ export const claudeCodePlugin: OmniDeckPlugin = {
 
         // Drop opacity for slot tiles — STALE just means "not currently live",
         // but the user asked for the most-recent projects and wants them readable.
-        const { opacity: _opacity, ...visuals } = stateVisuals(session.state);
+        // If this session has been long-press-dismissed since its last activity,
+        // override visuals to the STALE look (no badge, dim icon) until new
+        // activity bumps lastActivityMs past the stored ack.
+        const effectiveState: SessionState = isAcknowledged(session)
+          ? "STALE"
+          : session.state;
+        const { opacity: _opacity, ...visuals } = stateVisuals(effectiveState);
         const project = session.cwd.split("/").pop() ?? "";
         const tile = displayStyle === "body"
           ? {
@@ -497,6 +534,7 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       category: "Developer",
       icon: "ms:terminal",
       action: "focus_recent",
+      longPressAction: "dismiss_recent",
       stateProvider: "recent_session",
       defaults: {
         icon: "ms:terminal",
