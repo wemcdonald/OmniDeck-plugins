@@ -72,15 +72,6 @@ const configSchema = z.object({
     secret: true,
     group: "Status analysis",
   }),
-  anthropic_model: field(
-    z.string().default("haiku"),
-    {
-      label: "Claude model",
-      description:
-        "Short aliases: haiku / sonnet / opus (always resolve to the latest stable snapshot). Full model IDs (e.g. claude-haiku-4-5-20251001) also accepted. Haiku is cheapest and fastest — recommended for this 1-token classification.",
-      group: "Status analysis",
-    },
-  ),
   openai_api_key: field(z.string().default(""), {
     label: "OpenAI API key",
     description:
@@ -89,15 +80,6 @@ const configSchema = z.object({
     secret: true,
     group: "Status analysis",
   }),
-  openai_model: field(
-    z.string().default("gpt-mini"),
-    {
-      label: "OpenAI model",
-      description:
-        "Short aliases: gpt-mini (→ gpt-4o-mini, recommended) / gpt-nano (→ gpt-4.1-nano). Full model IDs also accepted. gpt-mini is cheap, fast, and plenty accurate for this 1-token classification.",
-      group: "Status analysis",
-    },
-  ),
 
   // Focus
   focus_strategies: field(

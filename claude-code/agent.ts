@@ -128,9 +128,7 @@ export default function init(omnideck: OmniDeck) {
     const classifierCfg: ClassifierConfig = {
       status_analysis: configStr(omnideck, "status_analysis", "none") as ClassifierConfig["status_analysis"],
       anthropic_api_key: configStr(omnideck, "anthropic_api_key", ""),
-      anthropic_model: configStr(omnideck, "anthropic_model", "claude-haiku-4-5-20251001"),
       openai_api_key: configStr(omnideck, "openai_api_key", ""),
-      openai_model: configStr(omnideck, "openai_model", "gpt-4o-mini"),
     };
 
     // Health: misconfigured when a provider is selected without its key.

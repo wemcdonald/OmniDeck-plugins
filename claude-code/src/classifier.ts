@@ -10,31 +10,14 @@ export type ClassifierVerdict = "ASKING" | "IDLE" | "UNKNOWN";
 export interface ClassifierConfig {
   status_analysis: "none" | "anthropic" | "openai";
   anthropic_api_key?: string;
-  anthropic_model?: string;
   openai_api_key?: string;
-  openai_model?: string;
 }
 
-// Short aliases that resolve to the latest stable snapshot for each family.
-// Full dated IDs (e.g. "claude-haiku-4-5-20251001") still pass through.
-const ANTHROPIC_ALIASES: Record<string, string> = {
-  haiku: "claude-haiku-4-5",
-  sonnet: "claude-sonnet-4-6",
-  opus: "claude-opus-4-7",
-};
-const OPENAI_ALIASES: Record<string, string> = {
-  "gpt-mini": "gpt-4o-mini",
-  "gpt-nano": "gpt-4.1-nano",
-};
-
-export function resolveAnthropicModel(m: string | undefined): string {
-  if (!m) return ANTHROPIC_ALIASES.haiku!;
-  return ANTHROPIC_ALIASES[m.toLowerCase()] ?? m;
-}
-export function resolveOpenAIModel(m: string | undefined): string {
-  if (!m) return OPENAI_ALIASES["gpt-mini"]!;
-  return OPENAI_ALIASES[m.toLowerCase()] ?? m;
-}
+// Hardcoded to the cheapest/fastest model per provider — this is a 1-token
+// ASKING-vs-IDLE classification, Haiku-class is plenty. When a provider
+// bumps their "latest haiku" snapshot, update these constants.
+const ANTHROPIC_MODEL = "claude-haiku-4-5";
+const OPENAI_MODEL = "gpt-5-mini";
 
 // ── Heuristic ────────────────────────────────────────────────────────────────
 
@@ -103,7 +86,7 @@ interface ProviderCall {
 const anthropicProvider: ProviderCall = async (text, config) => {
   const apiKey = config.anthropic_api_key;
   if (!apiKey) return "UNKNOWN";
-  const model = resolveAnthropicModel(config.anthropic_model);
+  const model = ANTHROPIC_MODEL;
 
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -136,7 +119,7 @@ const anthropicProvider: ProviderCall = async (text, config) => {
 const openaiProvider: ProviderCall = async (text, config) => {
   const apiKey = config.openai_api_key;
   if (!apiKey) return "UNKNOWN";
-  const model = resolveOpenAIModel(config.openai_model);
+  const model = OPENAI_MODEL;
 
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
