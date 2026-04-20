@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import sharp from "sharp";
+import { createCanvas, loadImage, type Image } from "@napi-rs/canvas";
 import { field, type OmniDeckPlugin, type PluginContext } from "@omnideck/plugin-schema";
 
 // Claude mark (Simple Icons, CC0). Inlined because the plugin bundler does not
@@ -17,6 +18,99 @@ async function renderClaudeIcon(fill: string, size: number): Promise<Buffer> {
     .resize(size, size, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
     .toBuffer();
+}
+
+// ── Body-style tile rendering ───────────────────────────────────────────────
+// Rendered with canvas into a Buffer that the renderer treats as iconFullBleed.
+// The tile itself is the "body": a large auto-sized wrapped project name with
+// a small Claude mark in the top-left corner tinted with the state color.
+
+const BODY_TILE_SIZE = 144; // 2x the deck tile; downscaled by the renderer.
+const BODY_BG = "#0f172a";
+const BODY_TEXT = "#ffffff";
+const BODY_PAD = 10;
+const CORNER_ICON_SIZE = 28;
+const CORNER_ICON_INSET = 8;
+
+/** Split `name` into 1–2 lines, preferring natural separators. */
+function wrapProjectName(name: string): string[] {
+  if (name.length <= 8) return [name];
+  const seps = ["-", "_", ".", "/", " "];
+  let best: [string, string] | undefined;
+  let bestDelta = Infinity;
+  for (let i = 1; i < name.length - 1; i++) {
+    if (!seps.includes(name[i])) continue;
+    const left = name.slice(0, i);
+    const right = name.slice(i + 1); // drop the separator
+    const delta = Math.abs(left.length - right.length);
+    if (delta < bestDelta) {
+      best = [left, right];
+      bestDelta = delta;
+    }
+  }
+  if (best && Math.max(best[0].length, best[1].length) <= 12) return best;
+  // No good separator — split near the middle anyway (cheap hyphenation).
+  const mid = Math.ceil(name.length / 2);
+  return [name.slice(0, mid), name.slice(mid)];
+}
+
+/** Pick the largest font size that fits every line within `maxWidth`. */
+function fitFontSize(
+  ctx: ReturnType<ReturnType<typeof createCanvas>["getContext"]>,
+  lines: string[],
+  maxWidth: number,
+  maxFont: number,
+  minFont: number,
+): number {
+  for (let size = maxFont; size >= minFont; size -= 2) {
+    ctx.font = `bold ${size}px sans-serif`;
+    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    if (widest <= maxWidth) return size;
+  }
+  return minFont;
+}
+
+function renderBodyTile(project: string, cornerIcon: Image | undefined): Buffer {
+  const size = BODY_TILE_SIZE;
+  const canvas = createCanvas(size, size);
+  const ctx = canvas.getContext("2d");
+
+  // Background.
+  ctx.fillStyle = BODY_BG;
+  ctx.fillRect(0, 0, size, size);
+
+  // Corner icon (top-left).
+  if (cornerIcon) {
+    ctx.drawImage(
+      cornerIcon,
+      CORNER_ICON_INSET,
+      CORNER_ICON_INSET,
+      CORNER_ICON_SIZE,
+      CORNER_ICON_SIZE,
+    );
+  }
+
+  // Project name — wrap and auto-size.
+  const lines = wrapProjectName(project);
+  const maxWidth = size - BODY_PAD * 2;
+  const fontSize = fitFontSize(ctx, lines, maxWidth, 48, 16);
+
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.fillStyle = BODY_TEXT;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const lineHeight = Math.round(fontSize * 1.1);
+  const totalHeight = lineHeight * lines.length;
+  // Center vertically in the area below the corner icon.
+  const bodyTop = CORNER_ICON_INSET + CORNER_ICON_SIZE / 2;
+  const bodyBottom = size - BODY_PAD;
+  const centerY = (bodyTop + bodyBottom) / 2;
+  const firstY = centerY - totalHeight / 2 + lineHeight / 2;
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], size / 2, firstY + i * lineHeight);
+  }
+
+  return canvas.toBuffer("image/png");
 }
 
 // ── Colors ──────────────────────────────────────────────────────────────────
@@ -205,16 +299,26 @@ export const claudeCodePlugin: OmniDeckPlugin = {
   async init(ctx: PluginContext) {
     // ── Pre-rendered Claude icon, tinted per state color ──────────────────
     // Done at init (async) so state providers can return Buffers synchronously.
+    // Two representations per color: a PNG Buffer (used by the hub renderer
+    // as the main icon in scroll mode) and a canvas Image (used to composite
+    // the corner icon into body-style tiles).
     const claudeIcons = new Map<string, Buffer>();
+    const claudeCornerImages = new Map<string, Image>();
     try {
       for (const color of [ORANGE, BLUE, GREEN, DIM, WHITE]) {
-        claudeIcons.set(color, await renderClaudeIcon(color, 144));
+        const big = await renderClaudeIcon(color, 144);
+        const corner = await renderClaudeIcon(color, CORNER_ICON_SIZE * 2);
+        claudeIcons.set(color, big);
+        claudeCornerImages.set(color, await loadImage(corner));
       }
     } catch (err) {
       ctx.log.warn({ err: String(err) }, "Failed to pre-render Claude icons; falling back to ms:terminal");
     }
     function claudeIconFor(color: string): Buffer | string {
       return claudeIcons.get(color) ?? "ms:terminal";
+    }
+    function claudeCornerFor(color: string): Image | undefined {
+      return claudeCornerImages.get(color) ?? claudeCornerImages.get(WHITE);
     }
 
     // ── Helpers to read agent state ───────────────────────────────────────
@@ -370,10 +474,14 @@ export const claudeCodePlugin: OmniDeckPlugin = {
           (p.target as string | undefined) ??
           (ctx.state.get("claude-code", "active_agent") as string | undefined);
         const session = getRecentSession(target, p.index as number);
+        const displayStyle = (p.display_style as string | undefined) ?? "scroll";
 
         if (!session) {
+          const empty = displayStyle === "body"
+            ? { icon: renderBodyTile("—", claudeCornerFor(DIM)), iconFullBleed: true, label: "" }
+            : { iconColor: DIM, icon: claudeIconFor(DIM), label: "—" };
           return {
-            state: { iconColor: DIM, icon: claudeIconFor(DIM), label: "—" },
+            state: empty,
             variables: { state: "NONE", project: "", cwd: "" },
           };
         }
@@ -382,13 +490,22 @@ export const claudeCodePlugin: OmniDeckPlugin = {
         // but the user asked for the most-recent projects and wants them readable.
         const { opacity: _opacity, ...visuals } = stateVisuals(session.state);
         const project = session.cwd.split("/").pop() ?? "";
+        const tile = displayStyle === "body"
+          ? {
+              ...visuals,
+              icon: renderBodyTile(project, claudeCornerFor(visuals.iconColor)),
+              iconFullBleed: true,
+              // Suppress the preset-default label; the name is baked into the tile.
+              label: "",
+            }
+          : {
+              ...visuals,
+              icon: claudeIconFor(visuals.iconColor),
+              label: project,
+              scrollLabel: true,
+            };
         return {
-          state: {
-            ...visuals,
-            icon: claudeIconFor(visuals.iconColor),
-            label: project,
-            scrollLabel: true,
-          },
+          state: tile,
           variables: {
             state: session.state,
             project,
