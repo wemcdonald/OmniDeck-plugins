@@ -145,6 +145,15 @@ const sessionStateSchema = z.object({
   }),
 });
 
+const recentSessionSchema = z.object({
+  ...targetParam,
+  index: field(z.number().int().min(0).max(14), {
+    label: "Slot index",
+    description:
+      "Which recent session to show (0 = most recent). Non-STALE sessions only.",
+  }),
+});
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function shortLabel(cwd: string, maxLen = 8): string {
   const parts = cwd.split("/");
@@ -207,6 +216,16 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       return Array.isArray(s) ? (s as Session[]) : [];
     }
 
+    function getRecentSession(
+      target: string | undefined,
+      index: number,
+    ): Session | undefined {
+      const sessions = getSessions(target)
+        .filter((s) => s.state !== "STALE")
+        .sort((a, b) => b.lastActivityMs - a.lastActivityMs);
+      return sessions[index];
+    }
+
     function findSession(
       target: string | undefined,
       params: {
@@ -255,6 +274,72 @@ export const claudeCodePlugin: OmniDeckPlugin = {
           },
           timestamp: Date.now(),
         });
+      },
+    });
+
+    // ── Action: focus_recent ──────────────────────────────────────────────
+    ctx.registerAction({
+      id: "focus_recent",
+      name: "Focus recent session",
+      description: "Focus the Nth most recently active Claude Code session.",
+      icon: "ms:terminal",
+      paramsSchema: recentSessionSchema,
+      async execute(params, actionCtx) {
+        const p = params as Record<string, unknown>;
+        const target = resolveTarget(p, actionCtx);
+        if (!target) {
+          ctx.log.warn("claude-code.focus_recent: no target agent");
+          return;
+        }
+        const session = getRecentSession(target, p.index as number);
+        if (!session) {
+          ctx.log.debug({ index: p.index }, "focus_recent: no session in slot");
+          return;
+        }
+        ctx.state.set("claude-code", `pending:${target}:focus`, {
+          params: { session_id: session.sessionId, cwd: session.cwd },
+          timestamp: Date.now(),
+        });
+      },
+    });
+
+    // ── State provider: recent session by index ───────────────────────────
+    ctx.registerStateProvider({
+      id: "recent_session",
+      name: "Claude Code recent session",
+      description:
+        "Nth most recently active Claude Code session (0 = most recent).",
+      icon: "ms:terminal",
+      paramsSchema: recentSessionSchema,
+      providesIcon: true,
+      templateVariables: [
+        { key: "state", label: "Session state", example: "WORKING" },
+        { key: "project", label: "Project basename", example: "OmniDeck" },
+        { key: "cwd", label: "Working directory", example: "/Users/you/code/OmniDeck" },
+      ],
+      resolve(params) {
+        const p = params as Record<string, unknown>;
+        const target =
+          (p.target as string | undefined) ??
+          (ctx.state.get("claude-code", "active_agent") as string | undefined);
+        const session = getRecentSession(target, p.index as number);
+
+        if (!session) {
+          return {
+            state: { iconColor: DIM, label: "—", opacity: 0.4 },
+            variables: { state: "NONE", project: "", cwd: "" },
+          };
+        }
+
+        const visuals = stateVisuals(session.state);
+        return {
+          state: { ...visuals, label: shortLabel(session.cwd) },
+          variables: {
+            state: session.state,
+            project: session.cwd.split("/").pop() ?? "",
+            cwd: session.cwd,
+          },
+        };
       },
     });
 
@@ -322,6 +407,23 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       icon: "ms:terminal",
       action: "focus",
       stateProvider: "session",
+      defaults: {
+        icon: "ms:terminal",
+        label: "{{project}}",
+        background: "#0f172a",
+      },
+    });
+
+    // ── Preset: recent-session slot ───────────────────────────────────────
+    ctx.registerPreset({
+      id: "recent_session_button",
+      name: "Claude Code Recent Session",
+      description:
+        "Auto-populated slot showing the Nth most recently active session (0 = most recent).",
+      category: "Developer",
+      icon: "ms:terminal",
+      action: "focus_recent",
+      stateProvider: "recent_session",
       defaults: {
         icon: "ms:terminal",
         label: "{{project}}",
