@@ -37,9 +37,11 @@ async function listClaudePids(omnideck: OmniDeck): Promise<number[]> {
     }
     return pids;
   }
-  // macOS fallback (and anything else): use pgrep.
+  // macOS (and anything else): match processes whose executable name is exactly
+  // "claude" — not bootstrap shells, node MCP helpers, or `claude-code` VS Code
+  // extensions, all of which appear in `pgrep -f claude`.
   try {
-    const { stdout } = await omnideck.exec("pgrep", ["-f", "claude"]);
+    const { stdout } = await omnideck.exec("pgrep", ["-x", "claude"]);
     return stdout
       .split("\n")
       .map((s) => Number(s.trim()))

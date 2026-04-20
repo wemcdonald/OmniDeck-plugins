@@ -2,13 +2,37 @@
 // Focus a tmux pane by matching its pane_pid against the shell ancestor of the
 // `claude` process running in `cwd`. Falls back to matching pane_current_path.
 
+import { existsSync } from "fs";
 import type { OmniDeck } from "@omnideck/agent-sdk";
 import type { FocusStrategy } from "./index";
 import { findClaudePidByCwd, findShellAncestor } from "./proc";
 
+// The macOS agent runs under launchd with PATH=/usr/bin:/bin:/usr/sbin:/sbin,
+// which excludes Homebrew and MacPorts. Probe the common install locations so
+// tmux works without requiring the user to fix the agent env.
+const TMUX_CANDIDATES = [
+  "/opt/homebrew/bin/tmux",
+  "/usr/local/bin/tmux",
+  "/opt/local/bin/tmux",
+  "/usr/bin/tmux",
+];
+let tmuxPathCache: string | undefined | null = undefined; // undefined=unresolved, null=not found
+function resolveTmux(): string | undefined {
+  if (tmuxPathCache !== undefined) return tmuxPathCache ?? undefined;
+  for (const p of TMUX_CANDIDATES) {
+    if (existsSync(p)) {
+      tmuxPathCache = p;
+      return p;
+    }
+  }
+  tmuxPathCache = null;
+  return undefined;
+}
+
 async function tmuxAvailable(omnideck: OmniDeck): Promise<boolean> {
+  const tmuxBin = resolveTmux() ?? "tmux";
   try {
-    const { exitCode } = await omnideck.exec("tmux", ["list-sessions"]);
+    const { exitCode } = await omnideck.exec(tmuxBin, ["list-sessions"]);
     return exitCode === 0;
   } catch {
     return false;
@@ -20,7 +44,7 @@ async function findPaneByShellPid(
   shellPid: number,
 ): Promise<string | undefined> {
   try {
-    const { stdout } = await omnideck.exec("tmux", [
+    const { stdout } = await omnideck.exec(resolveTmux() ?? "tmux", [
       "list-panes",
       "-a",
       "-F",
@@ -41,7 +65,7 @@ async function findPaneByCwd(
   cwd: string,
 ): Promise<string | undefined> {
   try {
-    const { stdout } = await omnideck.exec("tmux", [
+    const { stdout } = await omnideck.exec(resolveTmux() ?? "tmux", [
       "list-panes",
       "-a",
       "-F",
@@ -67,7 +91,7 @@ async function raiseITermForTmuxSession(
   if (omnideck.platform !== "darwin") return;
   let clientTty: string | undefined;
   try {
-    const { stdout } = await omnideck.exec("tmux", [
+    const { stdout } = await omnideck.exec(resolveTmux() ?? "tmux", [
       "list-clients",
       "-t",
       sessionName,
@@ -131,7 +155,7 @@ export const tmuxStrategy: FocusStrategy = {
     // Resolve the tmux session name for this pane so we can raise iTerm.
     let sessionName: string | undefined;
     try {
-      const { stdout } = await omnideck.exec("tmux", [
+      const { stdout } = await omnideck.exec(resolveTmux() ?? "tmux", [
         "display-message",
         "-p",
         "-t",
@@ -144,13 +168,13 @@ export const tmuxStrategy: FocusStrategy = {
     }
 
     // Position the pane/window server-side.
-    await omnideck.exec("tmux", ["select-pane", "-t", pane]).catch(() => {});
-    await omnideck.exec("tmux", ["select-window", "-t", pane]).catch(() => {});
+    await omnideck.exec(resolveTmux() ?? "tmux", ["select-pane", "-t", pane]).catch(() => {});
+    await omnideck.exec(resolveTmux() ?? "tmux", ["select-window", "-t", pane]).catch(() => {});
 
     // Switch any attached client. Best-effort — if no client is attached, fine.
     if (sessionName) {
       await omnideck
-        .exec("tmux", ["switch-client", "-t", sessionName])
+        .exec(resolveTmux() ?? "tmux", ["switch-client", "-t", sessionName])
         .catch(() => {});
       await raiseITermForTmuxSession(omnideck, sessionName);
     }
