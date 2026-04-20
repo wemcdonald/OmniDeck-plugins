@@ -43,14 +43,18 @@ interface Session {
 const configSchema = z.object({
   // Timing
   poll_interval_ms: field(z.number().min(1000).max(30000).default(5000), {
-    label: "Poll interval (ms)",
+    label: "Poll interval",
     description: "How often to scan ~/.claude/projects for updated sessions.",
+    fieldType: "duration",
+    durationUnit: "ms",
     group: "Timing",
   }),
   stale_timeout_ms: field(z.number().min(60_000).default(86_400_000), {
-    label: "Stale timeout (ms)",
+    label: "Stale timeout",
     description:
-      "Safety net for abruptly-killed sessions. If a session never wrote its exit marker and has had no activity for this long, treat it as STALE. Default 24h.",
+      "Safety net for abruptly-killed sessions. If a session never wrote its exit marker and has had no activity for this long, treat it as STALE.",
+    fieldType: "duration",
+    durationUnit: "ms",
     group: "Timing",
   }),
 
@@ -88,6 +92,7 @@ const configSchema = z.object({
       label: "Focus strategies",
       description:
         "Order to try when focusing a session. Unavailable strategies (e.g. iTerm on Linux) are skipped automatically.",
+      fieldType: "multi_select",
       group: "Focus",
     },
   ),

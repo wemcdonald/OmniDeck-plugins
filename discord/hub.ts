@@ -37,7 +37,7 @@ const textChannelParams = z.object({
 
 const dndDurationParams = z.object({
   ...targetParam,
-  duration: field(z.number().default(60), { label: "Snooze Duration (minutes)" }),
+  duration: field(z.number().default(60), { label: "Snooze Duration", fieldType: "duration" as const, durationUnit: "m" as const }),
 });
 
 const discordConfigSchema = z.object({

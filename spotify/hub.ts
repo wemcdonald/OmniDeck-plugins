@@ -22,12 +22,16 @@ const configSchema = z.object({
     secret: true,
   }),
   poll_interval: field(z.number().min(1000).max(30000).default(3000), {
-    label: "Poll Interval (ms)",
+    label: "Poll Interval",
     description: "How often to check Spotify for updates (lower = more responsive)",
+    fieldType: "duration",
+    durationUnit: "ms",
   }),
   volume_step: field(z.number().min(1).max(50).default(10), {
     label: "Volume Step (%)",
     description: "Volume change per button press",
+    fieldType: "slider",
+    step: 1,
   }),
 });
 

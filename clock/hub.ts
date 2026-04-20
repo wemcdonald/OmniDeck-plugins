@@ -9,7 +9,7 @@ const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
 
 const clockParams = z.object({
-  mode: field(z.enum(["analog", "digital"]).default("analog"), { label: "Mode" }),
+  mode: field(z.enum(["analog", "digital"]).default("analog"), { label: "Mode", fieldType: "radio" as const }),
   timezone: field(z.string().optional(), { label: "Timezone", placeholder: "America/Los_Angeles" }),
   foreground: field(z.string().optional(), { label: "Foreground", fieldType: "color" as const }),
   background: field(z.string().optional(), { label: "Background", fieldType: "color" as const }),

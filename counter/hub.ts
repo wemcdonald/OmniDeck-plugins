@@ -8,8 +8,8 @@ const counterParams = z.object({
   id: field(z.string().default("default"), { label: "Counter ID", placeholder: "Unique name for this counter" }),
   color: field(z.string().default("#ffffff"), { label: "Number Color", fieldType: "color" as const }),
   background: field(z.string().default("#000000"), { label: "Background", fieldType: "color" as const }),
-  font_size: field(z.enum(["small", "medium", "large"]).default("large"), { label: "Size" }),
-  font: field(z.enum(["sans-serif", "monospace", "serif"]).default("sans-serif"), { label: "Font" }),
+  font_size: field(z.enum(["small", "medium", "large"]).default("large"), { label: "Size", fieldType: "radio" as const }),
+  font: field(z.enum(["sans-serif", "monospace", "serif"]).default("sans-serif"), { label: "Font", fieldType: "radio" as const }),
 });
 
 function renderCounter(size: number, count: number, color: string, bg: string, fontSize: string, font: string): Buffer {
