@@ -15,6 +15,27 @@ export interface ClassifierConfig {
   openai_model?: string;
 }
 
+// Short aliases that resolve to the latest stable snapshot for each family.
+// Full dated IDs (e.g. "claude-haiku-4-5-20251001") still pass through.
+const ANTHROPIC_ALIASES: Record<string, string> = {
+  haiku: "claude-haiku-4-5",
+  sonnet: "claude-sonnet-4-6",
+  opus: "claude-opus-4-7",
+};
+const OPENAI_ALIASES: Record<string, string> = {
+  "gpt-mini": "gpt-4o-mini",
+  "gpt-nano": "gpt-4.1-nano",
+};
+
+export function resolveAnthropicModel(m: string | undefined): string {
+  if (!m) return ANTHROPIC_ALIASES.haiku!;
+  return ANTHROPIC_ALIASES[m.toLowerCase()] ?? m;
+}
+export function resolveOpenAIModel(m: string | undefined): string {
+  if (!m) return OPENAI_ALIASES["gpt-mini"]!;
+  return OPENAI_ALIASES[m.toLowerCase()] ?? m;
+}
+
 // ── Heuristic ────────────────────────────────────────────────────────────────
 
 const TRIGGER_PHRASES = [
@@ -82,7 +103,7 @@ interface ProviderCall {
 const anthropicProvider: ProviderCall = async (text, config) => {
   const apiKey = config.anthropic_api_key;
   if (!apiKey) return "UNKNOWN";
-  const model = config.anthropic_model || "claude-haiku-4-5-20251001";
+  const model = resolveAnthropicModel(config.anthropic_model);
 
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -115,7 +136,7 @@ const anthropicProvider: ProviderCall = async (text, config) => {
 const openaiProvider: ProviderCall = async (text, config) => {
   const apiKey = config.openai_api_key;
   if (!apiKey) return "UNKNOWN";
-  const model = config.openai_model || "gpt-4o-mini";
+  const model = resolveOpenAIModel(config.openai_model);
 
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

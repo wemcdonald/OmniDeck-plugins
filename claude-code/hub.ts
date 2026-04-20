@@ -73,17 +73,11 @@ const configSchema = z.object({
     group: "Status analysis",
   }),
   anthropic_model: field(
-    z
-      .enum([
-        "claude-haiku-4-5-20251001",
-        "claude-haiku-3-5-latest",
-        "claude-sonnet-4-6",
-      ])
-      .default("claude-haiku-4-5-20251001"),
+    z.string().default("haiku"),
     {
       label: "Claude model",
       description:
-        "Claude Haiku 4.5 is cheapest and fastest — recommended. Sonnet is overkill for a 1-token classification.",
+        "Short aliases: haiku / sonnet / opus (always resolve to the latest stable snapshot). Full model IDs (e.g. claude-haiku-4-5-20251001) also accepted. Haiku is cheapest and fastest — recommended for this 1-token classification.",
       group: "Status analysis",
     },
   ),
@@ -96,11 +90,11 @@ const configSchema = z.object({
     group: "Status analysis",
   }),
   openai_model: field(
-    z.enum(["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano"]).default("gpt-4o-mini"),
+    z.string().default("gpt-mini"),
     {
       label: "OpenAI model",
       description:
-        "GPT-4o-mini recommended — cheap, fast, and plenty accurate for a 1-token classification.",
+        "Short aliases: gpt-mini (→ gpt-4o-mini, recommended) / gpt-nano (→ gpt-4.1-nano). Full model IDs also accepted. gpt-mini is cheap, fast, and plenty accurate for this 1-token classification.",
       group: "Status analysis",
     },
   ),
