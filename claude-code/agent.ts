@@ -80,7 +80,11 @@ async function classifySession(
   const lastActivityMs = summary.lastTimestampMs ?? summary.mtimeMs;
   const ageMs = Date.now() - lastActivityMs;
 
-  if (summary.hasLastPromptMarker || summary.lastRecordType === "last-prompt") {
+  if (summary.lastRecordType === "last-prompt") {
+    // Session exited — the transcript's latest record is the marker.
+    // We intentionally do NOT trigger STALE from `hasLastPromptMarker` alone,
+    // because a resumed session leaves the historical marker in the tail
+    // while writing new live records after it.
     state = "STALE";
   } else if (summary.lastAssistantStopReason === "tool_use") {
     state = "WORKING";
