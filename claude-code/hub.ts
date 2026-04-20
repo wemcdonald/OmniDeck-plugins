@@ -158,6 +158,14 @@ const recentSessionSchema = z.object({
     description:
       "Which recent session to show (0 = most recent). Non-STALE sessions only.",
   }),
+  display_style: field(
+    z.enum(["scroll", "body"]).default("scroll"),
+    {
+      label: "Display style",
+      description:
+        "scroll: Claude icon + project name scrolling at the bottom. body: large wrapped project name fills the tile, small Claude mark in the corner.",
+    },
+  ),
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
