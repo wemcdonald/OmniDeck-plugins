@@ -10,7 +10,7 @@ import { focusCwd, type StrategyId } from "./src/focus/index";
 
 const AGENT_CODE_VERSION = 2;
 
-export type SessionState = "WORKING" | "ASKING" | "IDLE" | "DONE" | "STALE";
+export type SessionState = "WORKING" | "ASKING" | "DONE" | "STALE";
 
 export interface Session {
   sessionId: string;
@@ -63,14 +63,15 @@ function hashText(t: string | undefined): string {
 }
 
 /**
- * Primary classifier: use JSONL structure first (WORKING/DONE are certain);
- * fall back to ASKING/IDLE classifier for end_turn.
+ * Primary classifier: JSONL structure first (WORKING/ASKING/STALE are certain);
+ * sessions that have ended produce STALE immediately. Everything else that's
+ * running and waiting at a prompt is DONE — and stays DONE until either the
+ * exit marker appears or the stale-timeout safety net trips (abrupt kill).
  */
 async function classifySession(
   summary: TranscriptSummary,
   config: ClassifierConfig,
   staleTimeoutMs: number,
-  doneLingerMs: number,
   onErr: (err: unknown) => void,
 ): Promise<Session> {
   let state: SessionState;
@@ -80,22 +81,22 @@ async function classifySession(
   const ageMs = Date.now() - lastActivityMs;
 
   if (summary.hasLastPromptMarker || summary.lastRecordType === "last-prompt") {
-    // Session exited. Linger briefly as DONE, then drop to STALE (which hides
-    // it from the page provider).
-    state = ageMs <= doneLingerMs ? "DONE" : "STALE";
+    state = "STALE";
   } else if (summary.lastAssistantStopReason === "tool_use") {
     state = "WORKING";
   } else if (summary.lastRecordType === "user") {
     state = "WORKING";
   } else if (summary.lastAssistantStopReason === "end_turn") {
     const { verdict, source } = await classify(summary.lastAssistantText, config, onErr);
-    state = verdict === "ASKING" ? "ASKING" : "IDLE";
+    state = verdict === "ASKING" ? "ASKING" : "DONE";
     classifierSource = source;
   } else {
-    state = "IDLE";
+    state = "DONE";
   }
 
-  if (state !== "DONE" && state !== "WORKING" && ageMs > staleTimeoutMs) {
+  // Safety net: a session whose process was killed (no last-prompt marker)
+  // eventually ages out to STALE so dead rows stop looking live.
+  if (state !== "WORKING" && ageMs > staleTimeoutMs) {
     state = "STALE";
   }
 
@@ -118,8 +119,7 @@ export default function init(omnideck: OmniDeck) {
 
   async function pollOnce() {
     const pollIntervalMs = configNum(omnideck, "poll_interval_ms", 5000);
-    const doneLingerMs = configNum(omnideck, "done_linger_ms", 30_000);
-    const staleTimeoutMs = configNum(omnideck, "stale_timeout_ms", 3_600_000);
+    const staleTimeoutMs = configNum(omnideck, "stale_timeout_ms", 86_400_000);
 
     const classifierCfg: ClassifierConfig = {
       status_analysis: configStr(omnideck, "status_analysis", "none") as ClassifierConfig["status_analysis"],
@@ -168,7 +168,6 @@ export default function init(omnideck: OmniDeck) {
           summary,
           classifierCfg,
           staleTimeoutMs,
-          doneLingerMs,
           (err) => {
             llmErrors++;
             omnideck.log.warn("classifier LLM error", { err: String(err) });
@@ -229,10 +228,12 @@ export default function init(omnideck: OmniDeck) {
 
   omnideck.onReloadConfig(() => {
     omnideck.log.info("config reloaded, resetting poll interval");
+    lastPushedJson = "";
     omnideck.clearInterval(handle);
     handle = omnideck.setInterval(() => {
       pollOnce().catch((err) => omnideck.log.error("poll error", { err: String(err) }));
     }, configNum(omnideck, "poll_interval_ms", 5000));
+    pollOnce().catch((err) => omnideck.log.error("reload poll error", { err: String(err) }));
   });
 
   // ── Action handler: focus ─────────────────────────────────────────────────
