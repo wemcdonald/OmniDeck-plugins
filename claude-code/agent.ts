@@ -133,17 +133,17 @@ export default function init(omnideck: OmniDeck) {
 
     // Health: misconfigured when a provider is selected without its key.
     if (classifierCfg.status_analysis === "anthropic" && !classifierCfg.anthropic_api_key) {
-      omnideck.setHealth({
+      omnideck.setHealth?.({
         status: "misconfigured",
         message: "Status analysis is set to Claude but no Anthropic API key is configured.",
       });
     } else if (classifierCfg.status_analysis === "openai" && !classifierCfg.openai_api_key) {
-      omnideck.setHealth({
+      omnideck.setHealth?.({
         status: "misconfigured",
         message: "Status analysis is set to ChatGPT but no OpenAI API key is configured.",
       });
     } else {
-      omnideck.setHealth({ status: "ok" });
+      omnideck.setHealth?.({ status: "ok" });
     }
 
     const files = discoverSessions();
@@ -193,7 +193,7 @@ export default function init(omnideck: OmniDeck) {
     }
 
     if (llmErrors > 0) {
-      omnideck.setHealth({
+      omnideck.setHealth?.({
         status: "error",
         message: `Classifier LLM had ${llmErrors} error(s) this poll — falling back to heuristics.`,
       });
@@ -212,7 +212,7 @@ export default function init(omnideck: OmniDeck) {
     // PageProvider use to resolve a target. (Without this, target-less button
     // presses can't find the right agent.)
     const anyLive = sessions.some((s) => s.state !== "STALE");
-    omnideck.setActive(anyLive);
+    omnideck.setActive?.(anyLive);
 
     // Reschedule.
     return pollIntervalMs;
