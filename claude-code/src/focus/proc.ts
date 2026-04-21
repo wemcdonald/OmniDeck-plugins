@@ -92,6 +92,53 @@ async function refreshCache(omnideck: OmniDeck): Promise<void> {
   claudePidCache = { built: now, entries };
 }
 
+/**
+ * Find the PID that has `filePath` open. Used to pinpoint the specific claude
+ * process for a given session when multiple claudes share a cwd.
+ */
+export async function findPidByOpenFile(
+  omnideck: OmniDeck,
+  filePath: string,
+): Promise<number | undefined> {
+  if (omnideck.platform === "linux") {
+    let dirs: string[] = [];
+    try {
+      dirs = readdirSync("/proc");
+    } catch {
+      return undefined;
+    }
+    for (const d of dirs) {
+      if (!/^\d+$/.test(d)) continue;
+      try {
+        const fds = readdirSync(`/proc/${d}/fd`);
+        for (const fd of fds) {
+          try {
+            if (readlinkSync(`/proc/${d}/fd/${fd}`) === filePath) {
+              return Number(d);
+            }
+          } catch {
+            // fd vanished
+          }
+        }
+      } catch {
+        // process vanished or no permission
+      }
+    }
+    return undefined;
+  }
+  // macOS: lsof -t prints just the pid. `^R` opens for read, `^W` for write —
+  // the classifier tails the file for read, so claude is typically the only
+  // writer. Use `-a` with `-w` filter disabled; plain lsof on the path lists
+  // every opener.
+  try {
+    const { stdout } = await omnideck.exec("lsof", ["-t", filePath]);
+    const pid = Number(stdout.split("\n")[0]?.trim());
+    return Number.isFinite(pid) && pid > 0 ? pid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function findClaudePidByCwd(
   omnideck: OmniDeck,
   cwd: string,

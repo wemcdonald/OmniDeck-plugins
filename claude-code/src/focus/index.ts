@@ -9,12 +9,20 @@ import { appStrategy } from "./app";
 
 export type StrategyId = "tmux" | "iterm" | "app";
 
+export interface FocusHints {
+  /**
+   * Absolute path to the session's JSONL transcript. Used to disambiguate
+   * the specific claude process when several are running under the same cwd.
+   */
+  transcriptPath?: string;
+}
+
 export interface FocusStrategy {
   id: StrategyId;
   /** Cheap check — should avoid subprocesses where possible. */
   isAvailable(omnideck: OmniDeck): Promise<boolean>;
   /** Attempt to focus the terminal at `cwd`. Returns true on success. */
-  focus(omnideck: OmniDeck, cwd: string): Promise<boolean>;
+  focus(omnideck: OmniDeck, cwd: string, hints: FocusHints): Promise<boolean>;
 }
 
 const STRATEGIES: Record<StrategyId, FocusStrategy> = {
@@ -27,6 +35,7 @@ export async function focusCwd(
   omnideck: OmniDeck,
   cwd: string,
   order: StrategyId[],
+  hints: FocusHints = {},
 ): Promise<{ ok: boolean; used?: StrategyId; tried: StrategyId[] }> {
   const tried: StrategyId[] = [];
   for (const id of order) {
@@ -44,7 +53,7 @@ export async function focusCwd(
 
     tried.push(id);
     try {
-      const ok = await strat.focus(omnideck, cwd);
+      const ok = await strat.focus(omnideck, cwd, hints);
       if (ok) return { ok: true, used: id, tried };
     } catch (err) {
       omnideck.log.warn(`focus strategy ${id} threw`, { err: String(err) });

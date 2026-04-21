@@ -5,7 +5,7 @@
 import { existsSync } from "fs";
 import type { OmniDeck } from "@omnideck/agent-sdk";
 import type { FocusStrategy } from "./index";
-import { findClaudePidByCwd, findShellAncestor, ttyFor } from "./proc";
+import { findClaudePidByCwd, findPidByOpenFile, findShellAncestor, ttyFor } from "./proc";
 
 async function itermRunning(omnideck: OmniDeck): Promise<boolean> {
   try {
@@ -25,8 +25,10 @@ export const itermStrategy: FocusStrategy = {
     return itermRunning(omnideck);
   },
 
-  async focus(omnideck, cwd) {
-    const claudePid = await findClaudePidByCwd(omnideck, cwd);
+  async focus(omnideck, cwd, hints) {
+    const claudePid =
+      (hints.transcriptPath ? await findPidByOpenFile(omnideck, hints.transcriptPath) : undefined) ??
+      (await findClaudePidByCwd(omnideck, cwd));
     if (!claudePid) return false;
     const shellPid = await findShellAncestor(omnideck, claudePid);
     if (!shellPid) return false;
@@ -54,11 +56,15 @@ tell application "iTerm2"
 end tell`.trim();
 
     try {
-      const result = (await omnideck.platformRequest("run_applescript", {
-        script,
-      })) as unknown;
-      const ok = typeof result === "string" && result.includes("ok");
-      return ok;
+      const result = await omnideck.platformRequest("run_applescript", { script });
+      // platformRequest returns { result: "<stdout>" } from run_applescript.
+      const stdout =
+        typeof result === "string"
+          ? result
+          : result && typeof result === "object" && "result" in result
+            ? String((result as { result: unknown }).result ?? "")
+            : "";
+      return stdout.includes("ok");
     } catch (err) {
       omnideck.log.debug("iTerm AppleScript failed", { err: String(err) });
       return false;

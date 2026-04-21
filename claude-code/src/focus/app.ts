@@ -13,7 +13,7 @@ export const appStrategy: FocusStrategy = {
     return omnideck.platform === "darwin" || omnideck.platform === "linux";
   },
 
-  async focus(omnideck, cwd) {
+  async focus(omnideck, cwd, _hints) {
     if (omnideck.platform === "darwin") {
       const appName = existsSync("/Applications/iTerm.app") ? "iTerm" : "Terminal";
       try {

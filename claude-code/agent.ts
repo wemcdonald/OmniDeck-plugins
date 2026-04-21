@@ -244,22 +244,34 @@ export default function init(omnideck: OmniDeck) {
     const explicitCwd = params.cwd as string | undefined;
 
     let cwd = explicitCwd;
-    if (!cwd && sessionId) {
-      // Look up cwd from our cache first.
+    let transcriptPath: string | undefined;
+    // Always look up the transcript path — it's how we disambiguate which
+    // claude process we want when several share the same cwd (multiple tmux
+    // windows rooted at the same directory).
+    if (sessionId) {
       for (const entry of classifyCache.values()) {
         if (entry.session.sessionId === sessionId) {
-          cwd = entry.session.cwd;
+          cwd = cwd ?? entry.session.cwd;
+          // classifyCache keys are the transcript file paths.
+          for (const [path, cached] of classifyCache.entries()) {
+            if (cached.session.sessionId === sessionId) {
+              transcriptPath = path;
+              break;
+            }
+          }
           break;
         }
       }
-      // Fallback: rescan now.
-      if (!cwd) {
+      if (!cwd || !transcriptPath) {
         for (const f of discoverSessions()) {
           if (f.sessionId === sessionId) {
-            try {
-              cwd = summarize(f).cwd;
-            } catch {
-              // ignore
+            transcriptPath = transcriptPath ?? f.path;
+            if (!cwd) {
+              try {
+                cwd = summarize(f).cwd;
+              } catch {
+                // ignore
+              }
             }
             break;
           }
@@ -276,7 +288,7 @@ export default function init(omnideck: OmniDeck) {
       "iterm",
       "app",
     ]);
-    const result = await focusCwd(omnideck, cwd, order);
+    const result = await focusCwd(omnideck, cwd, order, { transcriptPath });
     if (result.ok) {
       omnideck.log.info(`focused session ${sessionId} via ${result.used}`);
       return { success: true, result: { used: result.used } };
