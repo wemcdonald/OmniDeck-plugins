@@ -204,7 +204,12 @@ export default function init(omnideck: OmniDeck) {
     if (payload !== lastPushedJson) {
       omnideck.setState("sessions", sessions);
       lastPushedJson = payload;
-      omnideck.log.debug(`pushed ${sessions.length} sessions`);
+      omnideck.log.info(`pushed ${sessions.length} sessions`, {
+        working: sessions.filter(s => s.state === "WORKING").length,
+        asking: sessions.filter(s => s.state === "ASKING").length,
+        done: sessions.filter(s => s.state === "DONE").length,
+        stale: sessions.filter(s => s.state === "STALE").length,
+      });
     }
 
     // Mark plugin "active" whenever any session exists — this tells the hub to
