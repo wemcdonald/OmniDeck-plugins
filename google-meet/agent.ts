@@ -175,11 +175,6 @@ export default function init(omnideck: OmniDeck) {
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
-  omnideck.onReloadConfig(() => {
-    // Hub reconnected — re-push current state to repopulate empty store
-    pushState();
-  });
-
   omnideck.onDestroy(() => {
     server.stop();
     omnideck.log.info("WebSocket server stopped");

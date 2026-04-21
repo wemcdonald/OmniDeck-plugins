@@ -39,11 +39,6 @@ const EMPTY_STATE: DiscordState = {
 export default function init(omnideck: OmniDeck) {
   let clientId = omnideck.config.client_id as string;
   let clientSecret = omnideck.config.client_secret as string;
-  let repushState: (() => void) | null = null;
-
-  function startConnection(id: string, secret: string) {
-    repushState = runDiscordPlugin(omnideck, id, secret);
-  }
 
   // If config not available at init, wait for reload (config is sent after plugin loads)
   if (!clientId || !clientSecret) {
@@ -55,24 +50,16 @@ export default function init(omnideck: OmniDeck) {
       if (newId && newSecret && !clientId) { // only start once
         clientId = newId;
         clientSecret = newSecret;
-        startConnection(newId, newSecret);
-      } else {
-        // Hub reconnected — re-push current state to repopulate empty store
-        repushState?.();
+        runDiscordPlugin(omnideck, newId, newSecret);
       }
     });
     return;
   }
 
-  omnideck.onReloadConfig(() => {
-    // Hub reconnected — re-push current state to repopulate empty store
-    repushState?.();
-  });
-
-  startConnection(clientId, clientSecret);
+  runDiscordPlugin(omnideck, clientId, clientSecret);
 }
 
-function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: string): () => void {
+function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: string): void {
 
   let state: DiscordState = { ...EMPTY_STATE };
   let ipc: net.Socket | null = null;
@@ -654,5 +641,4 @@ function runDiscordPlugin(omnideck: OmniDeck, clientId: string, clientSecret: st
     ipc = null;
   });
 
-  return pushState;
 }
