@@ -148,6 +148,12 @@ export async function findClaudePidByCwd(
   return hit?.pid;
 }
 
+/** Return every known live claude PID (cache-backed, TTL CACHE_TTL_MS). */
+export async function getAllClaudePids(omnideck: OmniDeck): Promise<number[]> {
+  await refreshCache(omnideck);
+  return claudePidCache?.entries.map((e) => e.pid) ?? [];
+}
+
 /**
  * Walk up the process tree from `pid` until a shell (zsh/bash/fish) is found.
  * Returns the shell's PID, or undefined if none found within `maxDepth` hops.

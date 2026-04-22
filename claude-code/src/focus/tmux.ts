@@ -5,7 +5,7 @@
 import { existsSync } from "fs";
 import type { OmniDeck } from "@omnideck/agent-sdk";
 import type { FocusStrategy } from "./index";
-import { findClaudePidByCwd, findPidByOpenFile, walkAncestors } from "./proc";
+import { findClaudePidByCwd, findPidByOpenFile, getAllClaudePids, walkAncestors } from "./proc";
 
 // The macOS agent runs under launchd with PATH=/usr/bin:/bin:/usr/sbin:/sbin,
 // which excludes Homebrew and MacPorts. Probe the common install locations so
@@ -82,28 +82,84 @@ async function findPaneByAncestor(
   return undefined;
 }
 
+/**
+ * Find a pane whose current_path matches `cwd`. If multiple panes match,
+ * rank candidates to pick the most likely "claude window":
+ *  1. Pane whose process tree contains any running `claude`.
+ *  2. Pane whose foreground command is an interactive shell (zsh/bash/fish).
+ *  3. Fall back to the most recently active pane.
+ * This replaces the old "first match wins" behavior that often landed on
+ * the most-recently-created pane with that cwd (e.g. a fresh editor window
+ * opened in the same repo after the claude session).
+ */
 async function findPaneByCwd(
   omnideck: OmniDeck,
   cwd: string,
+  claudePids: number[],
 ): Promise<string | undefined> {
+  interface Candidate {
+    paneId: string;
+    panePid: number;
+    command: string;
+    activity: number;
+  }
+  const candidates: Candidate[] = [];
   try {
     const { stdout } = await omnideck.exec(resolveTmux() ?? "tmux", [
       "list-panes",
       "-a",
       "-F",
-      "#{pane_id} #{pane_current_path}",
+      "#{pane_id}\t#{pane_pid}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_activity}",
     ]);
     for (const line of stdout.split("\n")) {
-      const idx = line.indexOf(" ");
-      if (idx < 0) continue;
-      const paneId = line.slice(0, idx);
-      const paneCwd = line.slice(idx + 1);
-      if (paneCwd === cwd) return paneId;
+      const parts = line.split("\t");
+      if (parts.length < 5) continue;
+      const [paneId, panePidStr, command, paneCwd, activityStr] = parts;
+      if (paneCwd !== cwd) continue;
+      candidates.push({
+        paneId,
+        panePid: Number(panePidStr) || 0,
+        command: command || "",
+        activity: Number(activityStr) || 0,
+      });
     }
   } catch {
     // ignore
   }
-  return undefined;
+  if (candidates.length === 0) return undefined;
+  if (candidates.length === 1) return candidates[0].paneId;
+
+  // Build set of pane_pids that have a claude descendant. For each claude
+  // PID, walk its ancestors and check whether any is a candidate's panePid.
+  const panesWithClaude = new Set<string>();
+  const candidatePanePids = new Set(candidates.map((c) => c.panePid));
+  for (const claudePid of claudePids) {
+    const ancestors = await walkAncestors(omnideck, claudePid);
+    for (const a of ancestors) {
+      if (candidatePanePids.has(a)) {
+        const match = candidates.find((c) => c.panePid === a);
+        if (match) panesWithClaude.add(match.paneId);
+      }
+    }
+  }
+
+  const isShell = (cmd: string) => /^(zsh|bash|fish|sh|dash)$/.test(cmd);
+  candidates.sort((a, b) => {
+    const aHasClaude = panesWithClaude.has(a.paneId) ? 1 : 0;
+    const bHasClaude = panesWithClaude.has(b.paneId) ? 1 : 0;
+    if (aHasClaude !== bHasClaude) return bHasClaude - aHasClaude;
+    const aShell = isShell(a.command) ? 1 : 0;
+    const bShell = isShell(b.command) ? 1 : 0;
+    if (aShell !== bShell) return bShell - aShell;
+    return b.activity - a.activity;
+  });
+
+  omnideck.log.info(
+    `findPaneByCwd cwd=${cwd} candidates=${candidates
+      .map((c) => `${c.paneId}(${c.command},claude=${panesWithClaude.has(c.paneId)},act=${c.activity})`)
+      .join(",")} picked=${candidates[0].paneId}`,
+  );
+  return candidates[0].paneId;
 }
 
 /** Unwrap the AppleScript response shape: { result: "<stdout>" } or raw string. */
@@ -308,10 +364,13 @@ export const tmuxStrategy: FocusStrategy = {
       }
     }
 
-    // Strategy 2: pane_current_path match (approximate — may pick a stale
-    // window if multiple panes share the cwd).
+    // Strategy 2: pane_current_path match. When multiple panes share the cwd,
+    // findPaneByCwd ranks candidates — preferring panes whose process tree
+    // contains a live claude, then interactive shells, then most recently
+    // active — so we don't just pick the latest-created pane.
     if (!pane) {
-      pane = await findPaneByCwd(omnideck, cwd);
+      const claudePids = await getAllClaudePids(omnideck);
+      pane = await findPaneByCwd(omnideck, cwd, claudePids);
       if (pane) strategy = "cwd-pane";
     }
 
