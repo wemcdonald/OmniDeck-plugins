@@ -92,6 +92,20 @@ async function findPaneByAncestor(
  * the most-recently-created pane with that cwd (e.g. a fresh editor window
  * opened in the same repo after the claude session).
  */
+/**
+ * Return how closely `a` and `b` are related as filesystem paths:
+ *  2 = exact match
+ *  1 = one is a proper ancestor of the other (same project)
+ *  0 = unrelated
+ */
+function pathRelation(a: string, b: string): number {
+  if (a === b) return 2;
+  const aSlash = a.endsWith("/") ? a : a + "/";
+  const bSlash = b.endsWith("/") ? b : b + "/";
+  if (aSlash.startsWith(bSlash) || bSlash.startsWith(aSlash)) return 1;
+  return 0;
+}
+
 async function findPaneByCwd(
   omnideck: OmniDeck,
   cwd: string,
@@ -101,36 +115,68 @@ async function findPaneByCwd(
     paneId: string;
     panePid: number;
     command: string;
-    activity: number;
+    paneCwd: string;
+    relation: number;
   }
   const candidates: Candidate[] = [];
+  // Use a sentinel separator unlikely to appear in any field — tabs were
+  // unreliable (some environments collapse or mangle them through the exec
+  // pipeline). |||:::||| is never a legal path or command name.
+  const SEP = "|||:::|||";
   try {
-    const { stdout } = await omnideck.exec(resolveTmux() ?? "tmux", [
+    const { stdout, stderr, exitCode } = await omnideck.exec(resolveTmux() ?? "tmux", [
       "list-panes",
       "-a",
       "-F",
-      "#{pane_id}\t#{pane_pid}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_activity}",
+      `#{pane_id}${SEP}#{pane_pid}${SEP}#{pane_current_command}${SEP}#{pane_current_path}`,
     ]);
+    if (exitCode !== 0) {
+      omnideck.log.warn(`list-panes exit=${exitCode} stderr=${stderr.trim()}`);
+    }
     for (const line of stdout.split("\n")) {
-      const parts = line.split("\t");
-      if (parts.length < 5) continue;
-      const [paneId, panePidStr, command, paneCwd, activityStr] = parts;
-      if (paneCwd !== cwd) continue;
+      if (!line) continue;
+      const parts = line.split(SEP);
+      if (parts.length < 4) continue;
+      const [paneId, panePidStr, command, paneCwd] = parts;
+      const relation = pathRelation(paneCwd, cwd);
+      if (relation === 0) continue;
       candidates.push({
         paneId,
         panePid: Number(panePidStr) || 0,
         command: command || "",
-        activity: Number(activityStr) || 0,
+        paneCwd,
+        relation,
       });
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    omnideck.log.warn(`list-panes threw: ${String(err)}`);
   }
-  if (candidates.length === 0) return undefined;
-  if (candidates.length === 1) return candidates[0].paneId;
+  if (candidates.length === 0) {
+    // Dump every pane's cwd so we can see why nothing matched.
+    try {
+      const { stdout } = await omnideck.exec(resolveTmux() ?? "tmux", [
+        "list-panes",
+        "-a",
+        "-F",
+        "#{pane_id}=#{pane_current_path}",
+      ]);
+      const paneList = stdout.split("\n").filter(Boolean).join(" | ");
+      omnideck.log.info(`findPaneByCwd MISS want=${cwd} panes=[${paneList}]`);
+    } catch {
+      omnideck.log.info(`findPaneByCwd MISS want=${cwd} (failed to list)`);
+    }
+    return undefined;
+  }
+  if (candidates.length === 1) {
+    omnideck.log.info(
+      `findPaneByCwd cwd=${cwd} single=${candidates[0].paneId}(rel=${candidates[0].relation},cwd=${candidates[0].paneCwd})`,
+    );
+    return candidates[0].paneId;
+  }
 
-  // Build set of pane_pids that have a claude descendant. For each claude
-  // PID, walk its ancestors and check whether any is a candidate's panePid.
+  // Rank candidates. Exact-cwd panes beat ancestor/descendant matches.
+  // Within a tier: panes whose process tree contains a live claude win,
+  // then interactive shells, otherwise fall back to tmux's native order.
   const panesWithClaude = new Set<string>();
   const candidatePanePids = new Set(candidates.map((c) => c.panePid));
   for (const claudePid of claudePids) {
@@ -144,19 +190,23 @@ async function findPaneByCwd(
   }
 
   const isShell = (cmd: string) => /^(zsh|bash|fish|sh|dash)$/.test(cmd);
+  // A live claude in the process tree is the strongest signal that this is
+  // the pane the user means — rank it above cwd proximity. An ancestor-cwd
+  // pane with claude running beats a shell sitting at the exact session cwd
+  // but with no claude attached.
   candidates.sort((a, b) => {
     const aHasClaude = panesWithClaude.has(a.paneId) ? 1 : 0;
     const bHasClaude = panesWithClaude.has(b.paneId) ? 1 : 0;
     if (aHasClaude !== bHasClaude) return bHasClaude - aHasClaude;
+    if (a.relation !== b.relation) return b.relation - a.relation;
     const aShell = isShell(a.command) ? 1 : 0;
     const bShell = isShell(b.command) ? 1 : 0;
-    if (aShell !== bShell) return bShell - aShell;
-    return b.activity - a.activity;
+    return bShell - aShell;
   });
 
   omnideck.log.info(
     `findPaneByCwd cwd=${cwd} candidates=${candidates
-      .map((c) => `${c.paneId}(${c.command},claude=${panesWithClaude.has(c.paneId)},act=${c.activity})`)
+      .map((c) => `${c.paneId}(${c.command},rel=${c.relation},cwd=${c.paneCwd},claude=${panesWithClaude.has(c.paneId)})`)
       .join(",")} picked=${candidates[0].paneId}`,
   );
   return candidates[0].paneId;
@@ -335,6 +385,9 @@ export const tmuxStrategy: FocusStrategy = {
   },
 
   async focus(omnideck, cwd, hints) {
+    omnideck.log.info(
+      `tmux focus request cwd=${cwd} transcript=${hints.transcriptPath ?? "none"}`,
+    );
     // Build the pid → pane map once per invocation. Walking claude's process
     // ancestors against this map finds the right pane even through nested
     // shells, exec wrappers, or direnv layers — cases where the immediate

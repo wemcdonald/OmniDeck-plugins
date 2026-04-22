@@ -152,6 +152,46 @@ export function readLastRecords(path: string, maxRecords = 12): JsonlRecord[] {
   }
 }
 
+/**
+ * Scan from the start of a transcript and return the cwd from the first
+ * record that has one. Claude's first JSONL record is sometimes a summary
+ * or system event without a cwd field, so we skip ahead until we find a
+ * user/assistant record that carries it. Read a generous chunk from the
+ * head so we don't need multiple syscalls.
+ */
+export function readStartingCwd(path: string): string | undefined {
+  let fd: number;
+  try {
+    fd = openSync(path, "r");
+  } catch {
+    return undefined;
+  }
+  try {
+    const HEAD_BYTES = 64 * 1024;
+    const buf = Buffer.alloc(HEAD_BYTES);
+    const bytesRead = readSync(fd, buf, 0, HEAD_BYTES, 0);
+    const text = buf.slice(0, bytesRead).toString("utf-8");
+    const lines = text.split("\n");
+    // Drop the last line — it may be truncated if the transcript is longer
+    // than HEAD_BYTES. If the transcript is shorter, the terminating newline
+    // leaves a legitimate empty string we can safely drop anyway.
+    if (bytesRead === HEAD_BYTES && lines.length > 1) lines.pop();
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const rec = JSON.parse(trimmed) as JsonlRecord;
+        if (rec.cwd && typeof rec.cwd === "string") return rec.cwd;
+      } catch {
+        // Skip malformed line.
+      }
+    }
+    return undefined;
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** Extract plain text from an assistant message's `content` field. */
 function extractAssistantText(msg: JsonlRecord["message"]): string | undefined {
   if (!msg || msg.role !== "assistant") return undefined;
@@ -175,6 +215,12 @@ function extractAssistantText(msg: JsonlRecord["message"]): string | undefined {
 export function summarize(file: SessionFile): TranscriptSummary {
   const records = readLastRecords(file.path, 12);
 
+  // The folder-name decode in file.projectPath is lossy (can't distinguish
+  // real `-` from encoded `/`), so prefer the authoritative cwd from the
+  // first JSONL record that carries one. Fall back to the decoded folder
+  // only if the head has no cwd-bearing records at all.
+  const startingCwd = readStartingCwd(file.path) ?? file.projectPath;
+
   // Records are newest-first. Scan to find:
   //  - the last record type
   //  - whether a last-prompt marker exists anywhere in the tail
@@ -185,7 +231,7 @@ export function summarize(file: SessionFile): TranscriptSummary {
   let lastAssistantStopReason: StopReason | undefined;
   let lastAssistantText: string | undefined;
   let lastTimestampMs: number | undefined;
-  let cwd = file.projectPath;
+  let cwd = startingCwd;
 
   for (let i = 0; i < records.length; i++) {
     const r = records[i];
@@ -204,7 +250,7 @@ export function summarize(file: SessionFile): TranscriptSummary {
 
   return {
     sessionId: file.sessionId,
-    projectPath: file.projectPath,
+    projectPath: startingCwd,
     cwd,
     path: file.path,
     mtimeMs: file.mtimeMs,

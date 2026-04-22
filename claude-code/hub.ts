@@ -277,10 +277,12 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       target: string | undefined,
       index: number,
     ): Session | undefined {
-      // Deduplicate by project basename — keep the most recent session per project.
+      // Deduplicate by project basename — keep the most recent session per
+      // project. Key on `projectPath` (the static launch directory) rather
+      // than `cwd` (which drifts as Claude cd's around during a session).
       const byProject = new Map<string, Session>();
       for (const s of collectAllSessions(target)) {
-        const key = s.cwd.split("/").pop() || s.cwd;
+        const key = s.projectPath.split("/").pop() || s.projectPath;
         const existing = byProject.get(key);
         if (!existing || s.lastActivityMs > existing.lastActivityMs) {
           byProject.set(key, s);
@@ -447,7 +449,7 @@ export const claudeCodePlugin: OmniDeckPlugin = {
           ? "STALE"
           : session.state;
         const { opacity: _opacity, ...visuals } = stateVisuals(effectiveState);
-        const project = session.cwd.split("/").pop() ?? "";
+        const project = session.projectPath.split("/").pop() ?? "";
         const tile = displayStyle === "body"
           ? bodyIcon === "background"
             ? {
@@ -524,11 +526,11 @@ export const claudeCodePlugin: OmniDeckPlugin = {
         return {
           state: {
             ...visuals,
-            label: shortLabel(session.cwd),
+            label: shortLabel(session.projectPath),
           },
           variables: {
             state: session.state,
-            project: session.cwd.split("/").pop() ?? "",
+            project: session.projectPath.split("/").pop() ?? "",
             cwd: session.cwd,
           },
         };
