@@ -168,6 +168,28 @@ export async function findShellAncestor(
   return undefined;
 }
 
+/**
+ * Return every ancestor PID of `pid`, starting with `pid` itself and walking
+ * upward through the process tree. Useful for matching against an external
+ * set (e.g. tmux pane_pids) without assuming what kind of process the
+ * ancestor is.
+ */
+export async function walkAncestors(
+  omnideck: OmniDeck,
+  pid: number,
+  maxDepth = 20,
+): Promise<number[]> {
+  const chain: number[] = [];
+  let current = pid;
+  for (let depth = 0; depth < maxDepth && current > 1; depth++) {
+    chain.push(current);
+    const { ppid } = await psFor(omnideck, current);
+    if (!ppid) break;
+    current = ppid;
+  }
+  return chain;
+}
+
 async function psFor(
   omnideck: OmniDeck,
   pid: number,

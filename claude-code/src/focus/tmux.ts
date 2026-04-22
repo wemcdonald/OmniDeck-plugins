@@ -5,7 +5,7 @@
 import { existsSync } from "fs";
 import type { OmniDeck } from "@omnideck/agent-sdk";
 import type { FocusStrategy } from "./index";
-import { findClaudePidByCwd, findPidByOpenFile, findShellAncestor } from "./proc";
+import { findClaudePidByCwd, findPidByOpenFile, walkAncestors } from "./proc";
 
 // The macOS agent runs under launchd with PATH=/usr/bin:/bin:/usr/sbin:/sbin,
 // which excludes Homebrew and MacPorts. Probe the common install locations so
@@ -39,10 +39,14 @@ async function tmuxAvailable(omnideck: OmniDeck): Promise<boolean> {
   }
 }
 
-async function findPaneByShellPid(
+/**
+ * Build a map of pane_pid → pane_id for every tmux pane. Cached per focus()
+ * call via closure; rebuilt each invocation since panes come and go.
+ */
+async function listPaneByPid(
   omnideck: OmniDeck,
-  shellPid: number,
-): Promise<string | undefined> {
+): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
   try {
     const { stdout } = await omnideck.exec(resolveTmux() ?? "tmux", [
       "list-panes",
@@ -52,10 +56,28 @@ async function findPaneByShellPid(
     ]);
     for (const line of stdout.split("\n")) {
       const [paneId, pid] = line.trim().split(/\s+/);
-      if (Number(pid) === shellPid) return paneId;
+      const n = Number(pid);
+      if (paneId && Number.isFinite(n)) map.set(n, paneId);
     }
   } catch {
     // ignore
+  }
+  return map;
+}
+
+/**
+ * Walk up from `pid` and return the pane_id of the first ancestor that is a
+ * tmux pane_pid. Handles nested shells, exec wrappers, direnv, etc., where
+ * claude's immediate shell ancestor isn't the pane_pid itself.
+ */
+async function findPaneByAncestor(
+  omnideck: OmniDeck,
+  pid: number,
+  paneByPid: Map<number, string>,
+): Promise<string | undefined> {
+  for (const ancestor of await walkAncestors(omnideck, pid)) {
+    const pane = paneByPid.get(ancestor);
+    if (pane) return pane;
   }
   return undefined;
 }
@@ -257,30 +279,43 @@ export const tmuxStrategy: FocusStrategy = {
   },
 
   async focus(omnideck, cwd, hints) {
-    // Strategy 1a: transcript → specific claude PID → shell PID → pane_pid.
+    // Build the pid → pane map once per invocation. Walking claude's process
+    // ancestors against this map finds the right pane even through nested
+    // shells, exec wrappers, or direnv layers — cases where the immediate
+    // shell ancestor isn't the pane_pid itself.
+    const paneByPid = await listPaneByPid(omnideck);
+
+    // Strategy 1a: transcript → specific claude PID → ancestor pane_pid.
     // This is the precise path: the claude process for THIS session has the
     // transcript file open, which disambiguates when multiple claudes share
     // the same cwd (e.g., several tmux windows rooted at the same repo).
     let pane: string | undefined;
+    let strategy = "none";
     if (hints.transcriptPath) {
       const claudePid = await findPidByOpenFile(omnideck, hints.transcriptPath);
       if (claudePid) {
-        const shellPid = await findShellAncestor(omnideck, claudePid);
-        if (shellPid) pane = await findPaneByShellPid(omnideck, shellPid);
+        pane = await findPaneByAncestor(omnideck, claudePid, paneByPid);
+        if (pane) strategy = "transcript";
       }
     }
 
-    // Strategy 1b: cwd → first-matching claude PID → shell PID → pane_pid
+    // Strategy 1b: cwd → first-matching claude PID → ancestor pane_pid
     if (!pane) {
       const claudePid = await findClaudePidByCwd(omnideck, cwd);
       if (claudePid) {
-        const shellPid = await findShellAncestor(omnideck, claudePid);
-        if (shellPid) pane = await findPaneByShellPid(omnideck, shellPid);
+        pane = await findPaneByAncestor(omnideck, claudePid, paneByPid);
+        if (pane) strategy = "cwd-claude";
       }
     }
 
-    // Strategy 2: pane_current_path match (approximate)
-    if (!pane) pane = await findPaneByCwd(omnideck, cwd);
+    // Strategy 2: pane_current_path match (approximate — may pick a stale
+    // window if multiple panes share the cwd).
+    if (!pane) {
+      pane = await findPaneByCwd(omnideck, cwd);
+      if (pane) strategy = "cwd-pane";
+    }
+
+    omnideck.log.info(`tmux focus strategy=${strategy} pane=${pane ?? "none"}`);
 
     if (!pane) return false;
 
