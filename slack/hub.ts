@@ -6,6 +6,8 @@
 import { z } from "zod";
 import { createCanvas } from "@napi-rs/canvas";
 import { field, type OmniDeckPlugin, type PluginContext } from "@omnideck/plugin-schema";
+// @ts-expect-error — bundled as text by esbuild (.svg → string)
+import logoSvg from "./assets/logo.svg";
 
 // ── Slack API helpers ─────────────────────────────────────────────────────
 
@@ -443,10 +445,12 @@ export const slackPlugin: OmniDeckPlugin = {
   id: "slack",
   name: "Slack",
   version: "1.0.0",
-  icon: "ms:chat",
+  icon: "plugin:slack/logo",
   configSchema: slackConfigSchema,
 
   async init(ctx: PluginContext) {
+    ctx.registerIcon("logo", logoSvg as string);
+
     const config = ctx.config as Record<string, unknown>;
     const workspaces = new Map<string, SlackWorkspace>();
 

@@ -188,10 +188,18 @@ export const claudeCodePlugin: OmniDeckPlugin = {
   id: "claude-code",
   name: "Claude Code",
   version: "0.1.0",
-  icon: "ms:terminal",
+  icon: "plugin:claude-code/logo",
   configSchema,
 
   async init(ctx: PluginContext) {
+    // Expose the Claude mark as a first-class plugin icon any button can use
+    // via `plugin:claude-code/logo`. Use currentColor so renderer can tint it
+    // via iconColor on a per-button basis.
+    ctx.registerIcon(
+      "logo",
+      CLAUDE_SVG.replace("<path ", `<path fill="currentColor" `),
+    );
+
     // ── Pre-rendered Claude icon, tinted per state color ──────────────────
     // The hub renderer accepts Buffers for both `icon` and `cornerIcon`, so
     // we can pre-rasterize once and reuse the same buffers for both slots.

@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 import { field, type OmniDeckPlugin, type PluginContext } from "@omnideck/plugin-schema";
+// @ts-expect-error — bundled as text by esbuild (.svg → string)
+import logoSvg from "./assets/logo.svg";
 
 interface ZoomState {
   running: boolean;
@@ -23,9 +25,11 @@ export const zoomPlugin: OmniDeckPlugin = {
   id: "zoom",
   name: "Zoom",
   version: "1.0.0",
-  icon: "ms:videocam",
+  icon: "plugin:zoom/logo",
 
   async init(ctx: PluginContext) {
+    ctx.registerIcon("logo", logoSvg as string);
+
     function resolveTarget(params: Record<string, unknown>, actionCtx: { focusedAgent?: string }) {
       return (params.target as string | undefined) ?? actionCtx.focusedAgent;
     }

@@ -3,6 +3,8 @@
 
 import { z } from "zod";
 import { field, type OmniDeckPlugin, type PluginContext } from "@omnideck/plugin-schema";
+// @ts-expect-error — bundled as text by esbuild (.svg → string)
+import logoSvg from "./assets/logo.svg";
 
 interface DiscordState {
   connected: boolean;
@@ -49,10 +51,12 @@ export const discordPlugin: OmniDeckPlugin = {
   id: "discord",
   name: "Discord",
   version: "1.0.0",
-  icon: "ms:headset-mic",
+  icon: "plugin:discord/logo",
   configSchema: discordConfigSchema,
 
   async init(ctx: PluginContext) {
+    ctx.registerIcon("logo", logoSvg as string);
+
     // ── Required-config guard ──────────────────────────────────────────────
     const cfgResult = discordConfigSchema.safeParse(ctx.config ?? {});
     if (!cfgResult.success) {

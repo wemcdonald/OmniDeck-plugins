@@ -5,6 +5,8 @@
 
 import { z } from "zod";
 import { field, type OmniDeckPlugin, type PluginContext } from "@omnideck/plugin-schema";
+// @ts-expect-error — bundled as text by esbuild (.svg → string)
+import logoSvg from "./assets/logo.svg";
 
 // ── Spotify brand colors ──────────────────────────────────────────────────
 const GREEN = "#1DB954";
@@ -46,10 +48,12 @@ export const spotifyPlugin: OmniDeckPlugin = {
   id: "spotify",
   name: "Spotify",
   version: "1.0.0",
-  icon: "ms:music-note",
+  icon: "plugin:spotify/logo",
   configSchema,
 
   async init(ctx: PluginContext) {
+    ctx.registerIcon("logo", logoSvg as string);
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     function resolveTarget(

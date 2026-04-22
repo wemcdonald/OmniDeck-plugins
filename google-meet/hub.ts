@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 import { field, type OmniDeckPlugin, type PluginContext } from "@omnideck/plugin-schema";
+// @ts-expect-error — bundled as text by esbuild (.svg → string)
+import logoSvg from "./assets/logo.svg";
 
 interface GoogleMeetState {
   extensionConnected: boolean;
@@ -22,9 +24,11 @@ export const googleMeetPlugin: OmniDeckPlugin = {
   id: "google-meet",
   name: "Google Meet",
   version: "1.0.0",
-  icon: "ms:videocam",
+  icon: "plugin:google-meet/logo",
 
   async init(ctx: PluginContext) {
+    ctx.registerIcon("logo", logoSvg as string);
+
     function resolveTarget(params: Record<string, unknown>, actionCtx: { focusedAgent?: string }) {
       return (params.target as string | undefined)
         ?? actionCtx.focusedAgent
