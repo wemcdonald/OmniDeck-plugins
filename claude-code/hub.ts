@@ -230,7 +230,7 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       ctx.log.warn({ err: String(err) }, "Failed to pre-render Claude icons; falling back to ms:terminal");
     }
     function claudeIconFor(color: string): Buffer | string {
-      return claudeIcons.get(color) ?? "ms:terminal";
+      return claudeIcons.get(color) ?? "plugin:claude-code/logo";
     }
     function claudeBgFor(color: string): Buffer | undefined {
       return claudeBackgrounds.get(color);
@@ -326,7 +326,7 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       id: "focus",
       name: "Focus session",
       description: "Switch to the terminal tab running the given Claude Code session.",
-      icon: "ms:terminal",
+      icon: "plugin:claude-code/logo",
       paramsSchema: focusSchema,
       async execute(params, actionCtx) {
         const p = params as Record<string, unknown>;
@@ -350,7 +350,7 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       id: "focus_recent",
       name: "Focus recent session",
       description: "Focus the Nth most recently active Claude Code session.",
-      icon: "ms:terminal",
+      icon: "plugin:claude-code/logo",
       paramsSchema: recentSessionSchema,
       async execute(params, actionCtx) {
         const p = params as Record<string, unknown>;
@@ -408,7 +408,7 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       name: "Claude Code recent session",
       description:
         "Nth most recently active Claude Code session (0 = most recent).",
-      icon: "ms:terminal",
+      icon: "plugin:claude-code/logo",
       paramsSchema: recentSessionSchema,
       providesIcon: true,
       templateVariables: [
@@ -487,7 +487,7 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       id: "session",
       name: "Claude Code session",
       description: "Color-coded state for a specific Claude Code session.",
-      icon: "ms:terminal",
+      icon: "plugin:claude-code/logo",
       paramsSchema: sessionStateSchema,
       providesIcon: true,
       templateVariables: [
@@ -543,11 +543,11 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       name: "Claude Code Session",
       description: "Pin a button to a specific Claude Code session or project.",
       category: "Developer",
-      icon: "ms:terminal",
+      icon: "plugin:claude-code/logo",
       action: "focus",
       stateProvider: "session",
       defaults: {
-        icon: "ms:terminal",
+        icon: "plugin:claude-code/logo",
         label: "{{project}}",
         background: "#0f172a",
       },
@@ -560,12 +560,12 @@ export const claudeCodePlugin: OmniDeckPlugin = {
       description:
         "Auto-populated slot showing the Nth most recently active session (0 = most recent).",
       category: "Developer",
-      icon: "ms:terminal",
+      icon: "plugin:claude-code/logo",
       action: "focus_recent",
       longPressAction: "dismiss_recent",
       stateProvider: "recent_session",
       defaults: {
-        icon: "ms:terminal",
+        icon: "plugin:claude-code/logo",
         label: "{{project}}",
         background: "#0f172a",
       },
@@ -605,7 +605,7 @@ export const claudeCodePlugin: OmniDeckPlugin = {
           pos: [i % 5, Math.floor(i / 5)],
           action: "focus",
           params: { session_id: s.sessionId, target },
-          icon: "ms:terminal",
+          icon: "plugin:claude-code/logo",
           icon_color: v.iconColor,
           label: shortLabel(s.cwd),
           ...(v.badge ? { badge: v.badge, badge_color: v.badgeColor } : {}),
