@@ -173,6 +173,11 @@ export const discordPlugin: OmniDeckPlugin = {
       icon: "ms:tune",
       paramsSchema: targetOnlySchema,
       async execute() {
+        const current = ctx.state.get("omnideck-core", "current_page") as string | null;
+        if (current && current !== "discord.voice_users") {
+          const history = (ctx.state.get("omnideck-core", "page_history") as string[]) ?? [];
+          ctx.state.set("omnideck-core", "page_history", [...history, current].slice(-20));
+        }
         ctx.state.set("omnideck-core", "current_page", "discord.voice_users");
       },
     });
@@ -186,6 +191,11 @@ export const discordPlugin: OmniDeckPlugin = {
       async execute(params) {
         const p = params as { user_id: string };
         ctx.state.set("discord", "selected_user", p.user_id);
+        const current = ctx.state.get("omnideck-core", "current_page") as string | null;
+        if (current && current !== "discord.user_volume") {
+          const history = (ctx.state.get("omnideck-core", "page_history") as string[]) ?? [];
+          ctx.state.set("omnideck-core", "page_history", [...history, current].slice(-20));
+        }
         ctx.state.set("omnideck-core", "current_page", "discord.user_volume");
       },
     });
