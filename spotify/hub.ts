@@ -148,7 +148,7 @@ export const spotifyPlugin: OmniDeckPlugin = {
       state: Record<string, unknown>;
       variables: Record<string, string>;
     } | null {
-      const emptyVars = { track: "", artist: "", album: "", volume: "" };
+      const emptyVars = { track: "", artist: "", album: "", volume: "", has_art: "false" };
       if (!playback || playback.status === "loading") {
         return {
           state: { icon: "ms:play-arrow", iconColor: GRAY, background: BG },
@@ -195,6 +195,7 @@ export const spotifyPlugin: OmniDeckPlugin = {
         { key: "track", label: "Track Name", example: "Bohemian Rhapsody" },
         { key: "artist", label: "Artist", example: "Queen" },
         { key: "album", label: "Album", example: "A Night at the Opera" },
+        { key: "has_art", label: "Album art loaded", example: "true" },
       ],
       resolve(params) {
         const p = params as Record<string, unknown>;
@@ -226,7 +227,7 @@ export const spotifyPlugin: OmniDeckPlugin = {
               iconFullBleed: true,
               progress: Math.min(progress / duration, 1),
             },
-            variables: { track: trackName, artist: artistName, album: albumName },
+            variables: { track: trackName, artist: artistName, album: albumName, has_art: "true" },
           };
         }
 
@@ -245,7 +246,7 @@ export const spotifyPlugin: OmniDeckPlugin = {
             icon: "ms:play-arrow",
             iconColor: hasTrack ? WHITE : GRAY,
           },
-          variables: { track: trackName, artist: artistName, album: albumName },
+          variables: { track: trackName, artist: artistName, album: albumName, has_art: "false" },
         };
       },
     });
